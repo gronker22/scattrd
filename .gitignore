@@ -1,0 +1,14 @@
+# Build artifacts
+.build/
+FocusTracker.app/
+focustracker_bin
+dist/
+
+# Packaged release assets are uploaded to GitHub Releases, not committed.
+
+# macOS
+.DS_Store
+
+# Editor
+*.swp
+.idea/

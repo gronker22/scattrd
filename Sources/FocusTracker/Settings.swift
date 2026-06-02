@@ -1,0 +1,57 @@
+import Foundation
+
+/// Thin UserDefaults wrapper for the daily-summary preferences.
+/// Both the scheduler and the menu read/write through here so they stay in sync.
+enum Settings {
+    private static let d = UserDefaults.standard
+
+    private enum Key {
+        static let enabled = "dailySummary.enabled"
+        static let hour    = "dailySummary.hour"
+        static let minute  = "dailySummary.minute"
+        static let lastDay = "dailySummary.lastFiredDay"
+        static let tabs    = "tracking.browserTabs"
+        static let rate    = "money.hourlyRate"
+    }
+
+    static var summaryEnabled: Bool {
+        get { d.object(forKey: Key.enabled) as? Bool ?? true }
+        set { d.set(newValue, forKey: Key.enabled) }
+    }
+
+    /// Hour (0–23) the daily summary fires. Default 17:00.
+    static var summaryHour: Int {
+        get { d.object(forKey: Key.hour) as? Int ?? 17 }
+        set { d.set(newValue, forKey: Key.hour) }
+    }
+
+    static var summaryMinute: Int {
+        get { d.object(forKey: Key.minute) as? Int ?? 0 }
+        set { d.set(newValue, forKey: Key.minute) }
+    }
+
+    /// "yyyy-MM-dd" of the last day we fired, so we notify at most once per day.
+    static var lastFiredDay: String? {
+        get { d.string(forKey: Key.lastDay) }
+        set { d.set(newValue, forKey: Key.lastDay) }
+    }
+
+    /// Whether to read the active browser tab's domain (needs Automation permission).
+    static var tabTrackingEnabled: Bool {
+        get { d.object(forKey: Key.tabs) as? Bool ?? true }
+        set { d.set(newValue, forKey: Key.tabs) }
+    }
+
+    /// Hourly rate used to translate lost focus time into a dollar figure.
+    static var hourlyRate: Double {
+        get { d.object(forKey: Key.rate) as? Double ?? 60 }
+        set { d.set(newValue, forKey: Key.rate) }
+    }
+
+    static var summaryTimeString: String {
+        var c = DateComponents(); c.hour = summaryHour; c.minute = summaryMinute
+        let date = Calendar.current.date(from: c) ?? Date()
+        let f = DateFormatter(); f.timeStyle = .short; f.dateStyle = .none
+        return f.string(from: date)
+    }
+}
