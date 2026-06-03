@@ -162,7 +162,8 @@ enum Dashboard {
   .wmeta{font-size:11px;color:var(--muted);text-align:center;line-height:1.3}
   .wmeta b{color:var(--text)}
   .finger{display:flex;gap:14px;margin-top:20px;flex-wrap:wrap}
-  .fcard{flex:1;min-width:150px;padding:16px 18px;border-radius:16px}
+  .fcard{flex:1;min-width:150px;padding:16px 18px;border-radius:16px;
+    background:#161a24;border:1px solid var(--brd);backdrop-filter:none;-webkit-backdrop-filter:none}
   .fcard .ft{font-size:12px;color:var(--muted)}
   .fcard .fv{font-size:21px;font-weight:720;margin-top:4px;letter-spacing:-.01em}
 
@@ -347,10 +348,10 @@ if(!T.hasData){
   const lean=(m===0&&a===0)?'Keep tracking to reveal your focus fingerprint.'
     :(m>a?'You focus deeper in the <b>morning</b>.':a>m?'You focus deeper in the <b>afternoon</b>.':'Your focus is evenly split across the day.');
   $('finger').innerHTML=
-    '<div class="fcard glass"><div class="ft">Morning deep-work</div><div class="fv" style="color:'+band(m)+'">'+m+'%</div></div>'+
-    '<div class="fcard glass"><div class="ft">Afternoon deep-work</div><div class="fv" style="color:'+band(a)+'">'+a+'%</div></div>'+
-    '<div class="fcard glass"><div class="ft">Best / toughest day</div><div class="fv">'+W.bestDay+' <span style="color:var(--faint);font-weight:500;font-size:14px">vs</span> '+W.worstDay+'</div></div>'+
-    '<div class="fcard glass" style="flex:2"><div class="ft">Your pattern</div><div class="fv" style="font-size:15px;font-weight:560;line-height:1.45">'+lean+'</div></div>';
+    '<div class="fcard"><div class="ft">Morning deep-work</div><div class="fv" style="color:'+band(m)+'">'+m+'%</div></div>'+
+    '<div class="fcard"><div class="ft">Afternoon deep-work</div><div class="fv" style="color:'+band(a)+'">'+a+'%</div></div>'+
+    '<div class="fcard"><div class="ft">Best / toughest day</div><div class="fv">'+W.bestDay+' <span style="color:var(--faint);font-weight:500;font-size:14px">vs</span> '+W.worstDay+'</div></div>'+
+    '<div class="fcard" style="flex:2"><div class="ft">Your pattern</div><div class="fv" style="font-size:15px;font-weight:560;line-height:1.45">'+lean+'</div></div>';
 })();
 
 // ---- Focus Debt ----
