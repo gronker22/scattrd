@@ -75,6 +75,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         popover.contentSize = NSSize(width: 344, height: 560)
         popover.behavior = .applicationDefined   // we manage closing via an event monitor
         popover.animates = true
+        popover.appearance = NSAppearance(named: .darkAqua)   // keep the popover chrome dark, not white
     }
 
     @objc private func statusClicked() {
@@ -132,6 +133,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             Settings.tabTrackingEnabled.toggle()
             if Settings.tabTrackingEnabled { BrowserTabReader.resetPermissionCache() }
             reloadPanel()
+        case "nudge":     Settings.nudgeEnabled.toggle(); reloadPanel()
         case "quit":      NSApp.terminate(nil)
         default: break
         }
@@ -176,6 +178,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "debtUSD": debt.dollarsLost, "debtInts": debt.interruptions,
             "dists": dists,
             "tabsOn": Settings.tabTrackingEnabled, "loginOn": LoginItem.isEnabled, "paused": isPaused,
+            "nudgeOn": Settings.nudgeEnabled,
         ]
         let json = (try? JSONSerialization.data(withJSONObject: obj))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
@@ -189,7 +192,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
   :root{--text:#eef0f6;--muted:#8b93a8;--card:rgba(255,255,255,.05);--brd:rgba(255,255,255,.10);
     --green:#34d399;--amber:#fbbf24;--red:#fb7185;--gray:#5b6478}
   *{box-sizing:border-box;margin:0}
-  html,body{background:transparent;color:var(--text);
+  html,body{background:#0c0e13;color:var(--text);
     font:13px/1.5 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
   body{padding:15px 15px 13px}
   .glass{background:var(--card);border:1px solid var(--brd);border-radius:13px}
@@ -264,6 +267,7 @@ document.getElementById('root').innerHTML =
   '<div style="height:10px"></div>'+
   tog('Track browser tabs',P.tabsOn,'tabs')+
   tog('Launch at login',P.loginOn,'login')+
+  tog('Nudge me when scattered',P.nudgeOn,'nudge')+
   tog(P.paused?'Tracking paused':'Tracking active',!P.paused,'pause')+
   '<div class="btns"><button class="primary" onclick="send(\'dashboard\')">Open Full Dashboard</button>'+
   '<button class="ghost" onclick="send(\'test\')">Send Test Summary</button>'+

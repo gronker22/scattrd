@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menu: MenuBarController!
     private var notifier: NotificationManager!
     private var summaryScheduler: DailySummaryScheduler!
+    private var nudge: FocusNudge!
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -35,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier.onOpenSummary = { [weak self] in self?.menu.presentSummary() }
         notifier.setUp()
         summaryScheduler = DailySummaryScheduler(store: store, notifier: notifier)
+        nudge = FocusNudge(store: store, notifier: notifier)
 
         menu.onSendTestSummary = { [weak self] in
             guard let self else { return }
@@ -70,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         monitor.tick()
         menu.refreshTitle()
         summaryScheduler.checkAndFireIfDue()
+        nudge.check()
     }
 
     @objc private func activeAppChanged(_ note: Notification) {

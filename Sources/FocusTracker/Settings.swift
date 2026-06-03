@@ -12,6 +12,8 @@ enum Settings {
         static let lastDay = "dailySummary.lastFiredDay"
         static let tabs    = "tracking.browserTabs"
         static let rate    = "money.hourlyRate"
+        static let nudge   = "nudge.enabled"
+        static let lastNudge = "nudge.last"
     }
 
     static var summaryEnabled: Bool {
@@ -46,6 +48,16 @@ enum Settings {
     static var hourlyRate: Double {
         get { d.object(forKey: Key.rate) as? Double ?? 60 }
         set { d.set(newValue, forKey: Key.rate) }
+    }
+
+    /// "Stop slacking" nudges when focus is low after enough activity.
+    static var nudgeEnabled: Bool {
+        get { d.object(forKey: Key.nudge) as? Bool ?? true }
+        set { d.set(newValue, forKey: Key.nudge) }
+    }
+    static var lastNudge: Double {
+        get { d.double(forKey: Key.lastNudge) }
+        set { d.set(newValue, forKey: Key.lastNudge) }
     }
 
     static var summaryTimeString: String {

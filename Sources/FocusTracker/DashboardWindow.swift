@@ -21,7 +21,7 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
     }
 
     private func build() {
-        let frame = NSRect(x: 0, y: 0, width: 1060, height: 780)
+        let frame = NSRect(x: 0, y: 0, width: 1320, height: 900)
 
         let wv = WKWebView(frame: frame)
         if #available(macOS 12.0, *) { wv.underPageBackgroundColor = bg }
@@ -31,7 +31,7 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
                            backing: .buffered, defer: false)
         win.title = "scattrd — Daily Replay"
         win.contentView = wv
-        win.minSize = NSSize(width: 760, height: 580)
+        win.minSize = NSSize(width: 940, height: 640)
         win.backgroundColor = bg
         win.isReleasedWhenClosed = false      // keep it around so we can reopen
         win.center()

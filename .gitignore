@@ -1,6 +1,6 @@
 # Build artifacts
 .build/
-FocusTracker.app/
+*.app/
 focustracker_bin
 dist/
 

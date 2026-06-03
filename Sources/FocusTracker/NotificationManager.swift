@@ -42,6 +42,17 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         post(insight, id: "daily-summary-test")
     }
 
+    /// "Stop slacking" nudge when today's score is low.
+    func postNudge(score: Int, switches: Int) {
+        let options = [
+            ("Stop slacking 👀", "Focus is \(score)/100 — \(switches) switches today. Time to lock in."),
+            ("You're scattered", "\(score)/100 right now. Pick one thing and stay with it for 20 minutes."),
+            ("Refocus 🎯", "\(score)/100 — you're bouncing between apps. Close the distractions and dig in."),
+        ]
+        let pick = options.randomElement()!
+        post(DailyInsight(title: pick.0, subtitle: pick.1, body: ""), id: "nudge")
+    }
+
     private func post(_ insight: DailyInsight, id: String) {
         guard available else { return }
         let content = UNMutableNotificationContent()

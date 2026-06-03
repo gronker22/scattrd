@@ -46,7 +46,7 @@ enum Dashboard {
   *{box-sizing:border-box}
   html{color-scheme:dark}
   body{margin:0;background:var(--bg);color:var(--text);overflow-x:hidden;
-    font:14px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
     -webkit-font-smoothing:antialiased;letter-spacing:.01em}
 
   /* Drifting aurora background for depth */
@@ -59,14 +59,14 @@ enum Dashboard {
   @keyframes drift2{50%{transform:translate(-7vmax,-5vmax) scale(1.1)}}
   @keyframes drift3{50%{transform:translate(-6vmax,7vmax) scale(1.2)}}
 
-  .wrap{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding:40px 28px 70px}
+  .wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:46px 38px 84px}
 
   /* Reveal-on-load motion */
   @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
   .reveal{opacity:0;animation:rise .7s cubic-bezier(.2,.8,.2,1) forwards}
 
-  h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
-    margin:0 0 18px;font-weight:600;display:flex;align-items:center;gap:10px}
+  h2{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+    margin:0 0 24px;font-weight:600;display:flex;align-items:center;gap:12px}
   h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--brd),transparent)}
 
   /* Glass surface */
@@ -102,7 +102,7 @@ enum Dashboard {
   .card .spark{height:3px;border-radius:3px;margin-top:11px;background:var(--brd);overflow:hidden}
   .card .spark i{display:block;height:100%;width:0;border-radius:3px;transition:width 1.1s cubic-bezier(.2,.8,.2,1) .3s}
 
-  .panel{padding:24px 24px 26px;border-radius:22px;margin-bottom:20px}
+  .panel{padding:30px 30px 32px;border-radius:24px;margin-bottom:24px}
 
   /* ---- Focus Debt (the differentiator) ---- */
   .debt{background:linear-gradient(135deg,rgba(251,113,133,.12),rgba(168,85,247,.05));border-color:rgba(251,113,133,.24)}
@@ -119,22 +119,22 @@ enum Dashboard {
 
   /* ---- Replay ---- */
   .replay{position:relative;user-select:none}
-  .curve{position:relative;height:74px;border-bottom:1px solid var(--brd)}
+  .curve{position:relative;height:140px;border-bottom:1px solid var(--brd)}
   .cbar{position:absolute;bottom:0}
   .cbar .act{position:absolute;bottom:0;left:9%;right:9%;background:rgba(255,255,255,.07);border-radius:4px 4px 0 0}
   .cbar .deep{position:absolute;bottom:0;left:9%;right:9%;border-radius:4px 4px 0 0;
     background:linear-gradient(180deg,#34d399,#0ea5a3);box-shadow:0 0 14px -2px rgba(52,211,153,.6)}
-  .strip{position:relative;height:50px;margin-top:12px;border-radius:10px;overflow:hidden;
+  .strip{position:relative;height:96px;margin-top:18px;border-radius:14px;overflow:hidden;
     background:rgba(255,255,255,.025);border:1px solid var(--brd)}
   .seg{position:absolute;top:0;bottom:0;min-width:2px;opacity:0;animation:segIn .5s ease forwards}
   .seg:hover{filter:brightness(1.25)}
   @keyframes segIn{to{opacity:1}}
-  .axis{position:relative;height:18px;margin-top:7px;color:var(--faint);font-size:11px}
+  .axis{position:relative;height:24px;margin-top:11px;color:var(--faint);font-size:13px}
   .axis span{position:absolute;transform:translateX(-50%)}
   .scrub{position:absolute;top:0;width:1px;background:rgba(255,255,255,.6);pointer-events:none;opacity:0;transition:opacity .15s}
   .scrub .rd{position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:#0b0d12;
     border:1px solid var(--brd2);border-radius:7px;padding:2px 8px;font-size:11px;white-space:nowrap}
-  .legend{display:flex;gap:18px;margin-top:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .legend{display:flex;gap:26px;margin-top:26px;flex-wrap:wrap;font-size:13.5px;color:var(--muted)}
   .legend i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:7px;vertical-align:0}
   .tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .12s;z-index:20;padding:9px 12px;
     border-radius:11px;font-size:12px;max-width:250px;background:rgba(12,14,20,.92);
