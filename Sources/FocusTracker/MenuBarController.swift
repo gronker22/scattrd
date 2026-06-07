@@ -66,7 +66,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
 
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 630), configuration: cfg)
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 690), configuration: cfg)
         if #available(macOS 12.0, *) {
             wv.underPageBackgroundColor = NSColor(red: 0.04, green: 0.045, blue: 0.06, alpha: 1)
         }
@@ -75,7 +75,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         let vc = NSViewController()
         vc.view = wv
         popover.contentViewController = vc
-        popover.contentSize = NSSize(width: 344, height: 630)
+        popover.contentSize = NSSize(width: 344, height: 690)
         popover.behavior = .applicationDefined   // we manage closing via an event monitor
         popover.animates = true
         popover.appearance = NSAppearance(named: .darkAqua)   // keep the popover chrome dark, not white
@@ -111,9 +111,9 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     /// Test helper: render the popover panel to a PNG.
     func snapshotPanel(_ completion: @escaping (String) -> Void) {
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 630))
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 690))
         snapWebView = wv
-        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 344, height: 630),
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 344, height: 690),
                            styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView = wv
         win.alphaValue = 0.02
@@ -166,6 +166,10 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             if Settings.tabTrackingEnabled { BrowserTabReader.resetPermissionCache() }
             reloadPanel()
         case "nudge":     Settings.nudgeEnabled.toggle(); reloadPanel()
+        case "calendar":
+            Settings.calendarEnabled.toggle()
+            if Settings.calendarEnabled { CalendarService.shared.requestAccess { [weak self] _ in self?.reloadPanel() } }
+            reloadPanel()
         case "goalUp":    Settings.streakThreshold += 5; reloadPanel()
         case "goalDown":  Settings.streakThreshold -= 5; reloadPanel()
         case "streakSeen": Settings.streakJustBroke = false   // clear after the break animation plays
@@ -212,6 +216,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "dists": dists,
             "tabsOn": Settings.tabTrackingEnabled, "loginOn": LoginItem.isEnabled, "paused": isPaused,
             "nudgeOn": Settings.nudgeEnabled,
+            "calOn": Settings.calendarEnabled,
             "streak": FocusStreak.current(store: store, threshold: threshold),
             "streakBest": FocusStreak.best(store: store, threshold: threshold),
             "streakGoal": threshold,
@@ -317,6 +322,7 @@ document.getElementById('root').innerHTML =
   tog('Track browser tabs',P.tabsOn,'tabs')+
   tog('Launch at login',P.loginOn,'login')+
   tog('Nudge me when scattered',P.nudgeOn,'nudge')+
+  tog('Show calendar meetings',P.calOn,'calendar')+
   tog(P.paused?'Tracking paused':'Tracking active',!P.paused,'pause')+
   '<div class="btns"><button class="primary" onclick="send(\'dashboard\')">Open Full Dashboard</button>'+
   '<button class="ghost" onclick="send(\'wrapped\')">Focus Wrapped ✨</button>'+

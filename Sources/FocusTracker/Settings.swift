@@ -17,6 +17,7 @@ enum Settings {
         static let streakPeak = "streak.peak"
         static let streakBroke = "streak.justBroke"
         static let streakBrokeLen = "streak.brokenLength"
+        static let calendar = "calendar.enabled"
     }
 
     static var summaryEnabled: Bool {
@@ -73,6 +74,12 @@ enum Settings {
     static var brokenStreakLength: Int {
         get { d.integer(forKey: Key.streakBrokeLen) }
         set { d.set(newValue, forKey: Key.streakBrokeLen) }
+    }
+
+    /// Whether to read calendar meetings (needs Calendar permission).
+    static var calendarEnabled: Bool {
+        get { d.bool(forKey: Key.calendar) }
+        set { d.set(newValue, forKey: Key.calendar) }
     }
 
     static var summaryTimeString: String {

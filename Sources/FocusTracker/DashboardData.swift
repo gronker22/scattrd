@@ -6,6 +6,9 @@ struct DashboardPayload: Codable {
     let date: String
     let today: TodayPayload
     let week: WeekPayload
+    let meetings: [MeetingDTO]
+    let meetingWorst: [MeetingRankDTO]
+    let calendarOn: Bool
 }
 
 struct TodayPayload: Codable {
@@ -166,8 +169,12 @@ enum DashboardData {
         )
 
         let df = DateFormatter(); df.dateFormat = "EEEE, MMM d"
+        let calOn = Settings.calendarEnabled && CalendarService.shared.isAuthorized
         return DashboardPayload(date: df.string(from: now), today: today,
-                                week: buildWeek(store: store, now: now))
+                                week: buildWeek(store: store, now: now),
+                                meetings: calOn ? MeetingAnalysis.today(store: store, now: now) : [],
+                                meetingWorst: calOn ? MeetingAnalysis.weeklyWorst(store: store, now: now) : [],
+                                calendarOn: calOn)
     }
 
     // --- Last 7 days, plus the morning/afternoon "focus fingerprint".

@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         summaryScheduler = DailySummaryScheduler(store: store, notifier: notifier)
         nudge = FocusNudge(store: store, notifier: notifier)
         streakTracker = StreakTracker(store: store, notifier: notifier)
+        if Settings.calendarEnabled { CalendarService.shared.requestAccess() }
 
         menu.onSendTestSummary = { [weak self] in
             guard let self else { return }

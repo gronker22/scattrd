@@ -45,7 +45,7 @@ swiftc -O \
     -target arm64-apple-macosx13.0 \
     -sdk "$SDK" \
     "${OVERLAY_ARGS[@]}" \
-    -framework AppKit -framework IOKit -framework UserNotifications -framework ServiceManagement -framework WebKit -lsqlite3 \
+    -framework AppKit -framework IOKit -framework UserNotifications -framework ServiceManagement -framework WebKit -framework EventKit -lsqlite3 \
     -o "$BIN" \
     Sources/FocusTracker/*.swift
 
@@ -74,6 +74,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>NSPrincipalClass</key>        <string>NSApplication</string>
     <key>NSHumanReadableCopyright</key><string>scattrd — local-only focus tracker. Your data never leaves this Mac.</string>
     <key>NSAppleEventsUsageDescription</key><string>scattrd reads the active tab's web address in your browser to measure which sites fragment your focus. Only the domain is stored, locally on this Mac.</string>
+    <key>NSCalendarsUsageDescription</key><string>scattrd reads your meeting times to show how meetings affect your focus. Calendar data stays on this Mac.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key><string>scattrd reads your meeting times to show how meetings affect your focus. Calendar data stays on this Mac.</string>
 </dict>
 </plist>
 PLIST

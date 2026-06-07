@@ -112,6 +112,19 @@ enum Dashboard {
   .goldband{position:absolute;top:0;bottom:0;z-index:0;pointer-events:none;
     background:linear-gradient(180deg,rgba(251,191,36,.18),rgba(251,191,36,.05));
     border-left:1px solid rgba(251,191,36,.35);border-right:1px solid rgba(251,191,36,.35)}
+  .mtgrow{position:relative;height:0}
+  .mtg{position:absolute;top:0;height:22px;line-height:22px;border-radius:6px;font-size:10.5px;padding:0 7px;
+    background:rgba(91,140,255,.24);border:1px solid rgba(91,140,255,.5);color:#c7d6ff;
+    overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:6px}
+  .mrow{display:flex;align-items:center;gap:12px;padding:8px 2px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13px}
+  .mrow:last-child{border-bottom:0}
+  .mt{color:var(--muted);width:62px;flex:0 0 auto;font-variant-numeric:tabular-nums}
+  .mname{flex:1;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mi{font-weight:600;white-space:nowrap;font-size:12.5px}
+  .mi-na{color:var(--faint);font-size:12px}
+  .mtg-sub{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:650;margin-bottom:6px}
+  .mtg-hint{color:var(--muted);font-size:13px;padding:8px 0;line-height:1.6}
+  .mtg-hint .sub{font-size:12px;margin-top:4px;color:var(--faint)}
   .curve{position:relative;height:140px;border-bottom:1px solid var(--brd)}
   .cbar{position:absolute;bottom:0}
   .cbar .act{position:absolute;bottom:0;left:9%;right:9%;background:rgba(255,255,255,.07);border-radius:4px 4px 0 0}
@@ -204,6 +217,7 @@ enum Dashboard {
     <h2>Focus Replay</h2>
     <div class="golden" id="golden"></div>
     <div class="replay" id="replay">
+      <div class="mtgrow" id="mtgrow"></div>
       <div class="curve" id="curve"></div>
       <div class="strip" id="strip"></div>
       <div class="scrub" id="scrub"><div class="rd" id="rd"></div></div>
@@ -215,6 +229,11 @@ enum Dashboard {
       <span><i style="background:var(--red)"></i>Distraction</span>
       <span><i style="background:var(--gray)"></i>Neutral / web</span>
     </div>
+  </section>
+
+  <section class="panel glass reveal">
+    <h2>Meetings &amp; Focus</h2>
+    <div id="meetings"></div>
   </section>
 
   <section class="panel glass reveal">
@@ -324,6 +343,19 @@ if(T.goldenValid){
     $('strip').insertAdjacentHTML('afterbegin',band);
   }
 }
+// ---- Meetings overlay on the timeline ----
+(function(){
+  const mr=$('mtgrow'); if(!mr) return;
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(DATA.calendarOn && DATA.meetings.length){
+    mr.style.height='24px'; mr.style.marginBottom='8px';
+    mr.innerHTML=DATA.meetings.map(m=>{
+      const l=Math.max(0,xPct(m.startTs)), r=Math.min(100,xPct(m.endTs));
+      if(r<=l) return '';
+      return '<div class="mtg" style="left:'+l+'%;width:'+(r-l)+'%">'+esc(m.title)+'</div>';
+    }).join('');
+  }
+})();
 const tip=$('tip'), strip=$('strip'), scrub=$('scrub'), rd=$('rd'), replay=$('replay');
 strip.addEventListener('mousemove',e=>{
   const seg=e.target.closest('.seg'); if(!seg){tip.style.opacity=0;return;}
@@ -390,6 +422,31 @@ function closeDay(){ $('dayModal').classList.remove('open'); }
     '<div class="fcard"><div class="ft">Afternoon deep-work</div><div class="fv" style="color:'+band(a)+'">'+a+'%</div></div>'+
     '<div class="fcard"><div class="ft">Best / toughest day</div><div class="fv">'+W.bestDay+' <span style="color:var(--faint);font-weight:500;font-size:14px">vs</span> '+W.worstDay+'</div></div>'+
     '<div class="fcard" style="flex:2"><div class="ft">Your pattern</div><div class="fv" style="font-size:15px;font-weight:560;line-height:1.45">'+lean+'</div></div>';
+})();
+
+// ---- Meetings & focus ----
+(function(){
+  const el=$('meetings'); if(!el) return;
+  const esc=s=>(''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  if(!DATA.calendarOn){
+    el.innerHTML='<div class="mtg-hint">📅 Connect your calendar to see how meetings affect your focus.<div class="sub">Turn on “Show calendar meetings” from the 🧠 menubar menu.</div></div>';
+    return;
+  }
+  const ms=DATA.meetings, worst=DATA.meetingWorst;
+  const hhmm=ts=>new Date(ts*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+  let html='<div class="mtg-sub">Today</div>';
+  if(ms.length){
+    html+=ms.map(m=>{
+      const imp=m.postScore<0?'<span class="mi-na">upcoming / no data</span>'
+        :'<span class="mi" style="color:'+band(m.postScore)+'">focus '+m.postScore+' after'+(m.drop>0?' · ▼'+m.drop:'')+'</span>';
+      return '<div class="mrow"><span class="mt">'+hhmm(m.startTs)+'</span><span class="mname">'+esc(m.title)+'</span>'+imp+'</div>';
+    }).join('');
+  } else { html+='<div class="mtg-hint">No meetings today 🎉</div>'; }
+  if(worst.length){
+    html+='<div class="mtg-sub" style="margin-top:18px">Focus-killer meetings · this week</div>';
+    html+=worst.map(w=>'<div class="mrow"><span class="mname">'+esc(w.title)+'</span><span class="mi" style="color:#fb7185">▼'+w.avgDrop+' avg · '+w.count+'×</span></div>').join('');
+  }
+  el.innerHTML=html;
 })();
 
 $('gen').textContent=new Date().toLocaleString();
