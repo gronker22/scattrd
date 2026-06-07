@@ -11,9 +11,12 @@ enum Settings {
         static let minute  = "dailySummary.minute"
         static let lastDay = "dailySummary.lastFiredDay"
         static let tabs    = "tracking.browserTabs"
-        static let rate    = "money.hourlyRate"
         static let nudge   = "nudge.enabled"
         static let lastNudge = "nudge.last"
+        static let streakGoal = "streak.threshold"
+        static let streakPeak = "streak.peak"
+        static let streakBroke = "streak.justBroke"
+        static let streakBrokeLen = "streak.brokenLength"
     }
 
     static var summaryEnabled: Bool {
@@ -44,12 +47,6 @@ enum Settings {
         set { d.set(newValue, forKey: Key.tabs) }
     }
 
-    /// Hourly rate used to translate lost focus time into a dollar figure.
-    static var hourlyRate: Double {
-        get { d.object(forKey: Key.rate) as? Double ?? 60 }
-        set { d.set(newValue, forKey: Key.rate) }
-    }
-
     /// "Stop slacking" nudges when focus is low after enough activity.
     static var nudgeEnabled: Bool {
         get { d.object(forKey: Key.nudge) as? Bool ?? true }
@@ -58,6 +55,24 @@ enum Settings {
     static var lastNudge: Double {
         get { d.double(forKey: Key.lastNudge) }
         set { d.set(newValue, forKey: Key.lastNudge) }
+    }
+
+    /// Score a day must reach to extend the focus streak (user-settable).
+    static var streakThreshold: Int {
+        get { (d.object(forKey: Key.streakGoal) as? Int) ?? 60 }
+        set { d.set(min(95, max(30, newValue)), forKey: Key.streakGoal) }
+    }
+    static var streakPeak: Int {
+        get { d.integer(forKey: Key.streakPeak) }
+        set { d.set(newValue, forKey: Key.streakPeak) }
+    }
+    static var streakJustBroke: Bool {
+        get { d.bool(forKey: Key.streakBroke) }
+        set { d.set(newValue, forKey: Key.streakBroke) }
+    }
+    static var brokenStreakLength: Int {
+        get { d.integer(forKey: Key.streakBrokeLen) }
+        set { d.set(newValue, forKey: Key.streakBrokeLen) }
     }
 
     static var summaryTimeString: String {

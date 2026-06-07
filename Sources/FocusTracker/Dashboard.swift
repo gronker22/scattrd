@@ -91,6 +91,7 @@ enum Dashboard {
   .chip{padding:7px 13px;border-radius:12px;font-size:12px;color:var(--muted);
     background:var(--card);border:1px solid var(--brd);transition:.25s}
   .chip:hover{border-color:var(--brd2);color:var(--text);transform:translateY(-1px)}
+  .streak-chip{background:rgba(251,146,60,.13);border-color:rgba(251,146,60,.34);color:var(--text)}
   .chip b{color:var(--text);font-weight:650;font-variant-numeric:tabular-nums}
 
   /* ---- Stat cards ---- */
@@ -104,21 +105,13 @@ enum Dashboard {
 
   .panel{padding:30px 30px 32px;border-radius:24px;margin-bottom:24px}
 
-  /* ---- Focus Debt (the differentiator) ---- */
-  .debt{background:linear-gradient(135deg,rgba(251,113,133,.12),rgba(168,85,247,.05));border-color:rgba(251,113,133,.24)}
-  .debt-row{display:flex;align-items:center;gap:28px;flex-wrap:wrap}
-  .debt-bigwrap{display:flex;align-items:baseline;gap:5px}
-  .debt-big{font-size:64px;font-weight:790;letter-spacing:-.03em;line-height:1;
-    background:linear-gradient(180deg,#fb7185,#f43f5e);background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-  .debt-unit{font-size:25px;font-weight:680;color:#fb7185}
-  .debt-meta{flex:1;min-width:230px}
-  .debt-equiv{font-size:20px;font-weight:690;letter-spacing:-.01em}
-  .debt-money{font-size:14px;color:#fda4af;margin-top:5px;font-weight:620}
-  .debt-sub{font-size:12.5px;color:var(--muted);margin-top:7px}
-  .debt-note{font-size:12.5px;color:var(--muted);margin-top:17px;padding-top:15px;border-top:1px solid var(--brd);line-height:1.55}
-
   /* ---- Replay ---- */
   .replay{position:relative;user-select:none}
+  .golden{font-size:13px;color:var(--amber);font-weight:600;margin:-8px 0 14px;display:flex;align-items:center;gap:6px}
+  .golden b{color:#fcd34d}
+  .goldband{position:absolute;top:0;bottom:0;z-index:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(251,191,36,.18),rgba(251,191,36,.05));
+    border-left:1px solid rgba(251,191,36,.35);border-right:1px solid rgba(251,191,36,.35)}
   .curve{position:relative;height:140px;border-bottom:1px solid var(--brd)}
   .cbar{position:absolute;bottom:0}
   .cbar .act{position:absolute;bottom:0;left:9%;right:9%;background:rgba(255,255,255,.07);border-radius:4px 4px 0 0}
@@ -161,6 +154,25 @@ enum Dashboard {
     box-shadow:0 0 22px -4px rgba(120,160,255,.5)}
   .wmeta{font-size:11px;color:var(--muted);text-align:center;line-height:1.3}
   .wmeta b{color:var(--text)}
+  .wday.clickable{cursor:pointer}
+  .wday.clickable:hover .wbar{filter:brightness(1.2)}
+  .dayModal{position:fixed;inset:0;z-index:30;background:rgba(5,6,10,.62);backdrop-filter:blur(5px);
+    display:none;align-items:center;justify-content:center;opacity:0;transition:opacity .2s}
+  .dayModal.open{display:flex;opacity:1}
+  .dayCard{width:380px;max-width:90vw;background:#13161d;border:1px solid var(--brd2);border-radius:20px;
+    padding:24px;box-shadow:0 30px 80px -20px #000;animation:pop .25s cubic-bezier(.2,.8,.2,1)}
+  @keyframes pop{from{transform:scale(.94);opacity:0}to{transform:none;opacity:1}}
+  .dayHd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;gap:14px}
+  .dayTitle{font-size:18px;font-weight:700}
+  .dayVerd{font-size:13px;font-weight:600;margin-top:3px}
+  .dayScore{font-size:46px;font-weight:780;line-height:1;letter-spacing:-.03em}
+  .dayRow{display:flex;justify-content:space-between;padding:9px 2px;border-bottom:1px solid rgba(255,255,255,.06);font-size:13.5px}
+  .dayRow:last-child{border-bottom:0}
+  .dk{color:var(--muted)}
+  .dv{font-weight:600}
+  .dayClose{margin-top:18px;width:100%;padding:11px;border-radius:12px;background:var(--card);
+    border:1px solid var(--brd);color:var(--text);font:inherit;font-weight:600;cursor:pointer}
+  .dayClose:hover{border-color:var(--brd2)}
   .finger{display:flex;gap:14px;margin-top:20px;flex-wrap:wrap}
   .fcard{flex:1;min-width:150px;padding:16px 18px;border-radius:16px;
     background:#161a24;border:1px solid var(--brd);backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -188,10 +200,9 @@ enum Dashboard {
 
   <section class="cards" id="cards"></section>
 
-  <section class="panel glass reveal debt" id="debtPanel"></section>
-
   <section class="panel glass reveal">
     <h2>Focus Replay</h2>
+    <div class="golden" id="golden"></div>
     <div class="replay" id="replay">
       <div class="curve" id="curve"></div>
       <div class="strip" id="strip"></div>
@@ -220,6 +231,7 @@ enum Dashboard {
   <footer>🔒 All data stays on your Mac · nothing leaves this device · <span id="gen"></span></footer>
 </div>
 <div class="tip" id="tip"></div>
+<div class="dayModal" id="dayModal"></div>
 
 <script>
 const DATA = \#(json);
@@ -256,9 +268,10 @@ document.querySelectorAll('.reveal').forEach((el,i)=>el.style.animationDelay=(i*
 })();
 $('date').textContent = DATA.date;
 $('verdict').textContent = T.verdict;
-$('chips').innerHTML = T.hasData ?
+const streakChip = T.streak>0 ? '<span class="chip streak-chip">🔥 <b>'+T.streak+'</b> day streak · best '+T.streakBest+'</span>' : '';
+$('chips').innerHTML = streakChip + (T.hasData ?
   [['Sustain',T.sustain],['Switching',T.switching],['Deep work',T.deepWork]]
-    .map(p=>'<span class="chip">'+p[0]+' <b>'+p[1]+'</b></span>').join('') : '';
+    .map(p=>'<span class="chip">'+p[0]+' <b>'+p[1]+'</b></span>').join('') : '');
 
 // ---- Stat cards ----
 const cards=[
@@ -301,6 +314,16 @@ $('strip').innerHTML = T.segments.map((s,i)=>{
   }
   $('axis').innerHTML=html;
 })();
+// ---- Golden hours ----
+$('golden').innerHTML = T.goldenValid ? '⭐ Your brain peaks at <b>'+T.goldenLabel+'</b> — your golden hours' : '';
+if(T.goldenValid){
+  const gl=Math.max(0,xPct(T.goldenStartTs)), gr=Math.min(100,xPct(T.goldenEndTs));
+  if(gr>gl){
+    const band='<div class="goldband" style="left:'+gl+'%;width:'+(gr-gl)+'%"></div>';
+    $('curve').insertAdjacentHTML('afterbegin',band);
+    $('strip').insertAdjacentHTML('afterbegin',band);
+  }
+}
 const tip=$('tip'), strip=$('strip'), scrub=$('scrub'), rd=$('rd'), replay=$('replay');
 strip.addEventListener('mousemove',e=>{
   const seg=e.target.closest('.seg'); if(!seg){tip.style.opacity=0;return;}
@@ -334,12 +357,27 @@ if(!T.hasData){
   setTimeout(()=>document.querySelectorAll('.dbar').forEach(b=>b.style.width=b.dataset.w+'%'),300);
 })();
 
+// ---- Day detail modal (click a weekly day) ----
+function showDay(i){
+  const d=W.days[i]; if(!d||!d.hasData) return;
+  const fn=m=>m>=10?Math.round(m):Math.round(m*10)/10;
+  const rows=[['Focus score',d.score+' / 100'],['Context switches',d.switches],['Avg focus block',fn(d.avgFocus)+' min'],['Longest streak',fn(d.longestFocus)+' min'],['Deep-work blocks',d.deepWorkBlocks],['Active time',fn(d.activeMin)+' min'],['Top distraction',d.topApp]];
+  $('dayModal').innerHTML='<div class="dayCard" onclick="event.stopPropagation()">'+
+    '<div class="dayHd"><div><div class="dayTitle">'+d.label+' '+d.date+'</div><div class="dayVerd" style="color:'+band(d.score)+'">'+d.verdict+'</div></div>'+
+    '<div class="dayScore" style="color:'+band(d.score)+'">'+d.score+'</div></div>'+
+    rows.map(r=>'<div class="dayRow"><span class="dk">'+r[0]+'</span><span class="dv">'+r[1]+'</span></div>').join('')+
+    '<button class="dayClose" onclick="closeDay()">Close</button></div>';
+  const m=$('dayModal'); m.classList.add('open'); m.onclick=closeDay;
+}
+function closeDay(){ $('dayModal').classList.remove('open'); }
+
 // ---- Weekly patterns ----
 (function(){
   const days=W.days;
-  $('week').innerHTML=days.map(d=>{
+  $('week').innerHTML=days.map((d,i)=>{
     const h=d.hasData?Math.max(14,d.score):5, col=d.hasData?band(d.score):'rgba(255,255,255,.08)';
-    return '<div class="wday'+(d.isToday?' wtoday':'')+'"><div class="wbar" data-h="'+h+'" style="background:'+col+'">'+(d.hasData?d.score:'')+'</div>'+
+    return '<div class="wday'+(d.isToday?' wtoday':'')+(d.hasData?' clickable':'')+'"'+(d.hasData?' onclick="showDay('+i+')"':'')+'>'+
+      '<div class="wbar" data-h="'+h+'" style="background:'+col+'">'+(d.hasData?d.score:'')+'</div>'+
       '<div class="wmeta"><b>'+d.label+'</b><br>'+d.date+'</div></div>';
   }).join('');
   setTimeout(()=>document.querySelectorAll('.wbar').forEach(b=>b.style.height=b.dataset.h+'%'),300);
@@ -352,25 +390,6 @@ if(!T.hasData){
     '<div class="fcard"><div class="ft">Afternoon deep-work</div><div class="fv" style="color:'+band(a)+'">'+a+'%</div></div>'+
     '<div class="fcard"><div class="ft">Best / toughest day</div><div class="fv">'+W.bestDay+' <span style="color:var(--faint);font-weight:500;font-size:14px">vs</span> '+W.worstDay+'</div></div>'+
     '<div class="fcard" style="flex:2"><div class="ft">Your pattern</div><div class="fv" style="font-size:15px;font-weight:560;line-height:1.45">'+lean+'</div></div>';
-})();
-
-// ---- Focus Debt ----
-(function(){
-  const h=W.debtHours, pct=W.debtWorkdayPct, dollars=W.debtDollars, ints=W.debtInterruptions;
-  const num = h>=1 ? h.toFixed(1) : String(Math.round(h*60));
-  const unit = h>=1 ? 'h' : 'min';
-  const equiv = pct>=100 ? '≈ '+(pct/100).toFixed(1)+' full workdays gone'
-              : ints>0 ? '≈ '+Math.max(1,pct)+'% of an 8-hour workday'
-              : 'No deep-work interruptions yet this week 🎯';
-  const money = dollars>=1 ? '<div class="debt-money">≈ $'+Math.round(dollars).toLocaleString()+' of focused time lost</div>' : '';
-  const sub = ints>0 ? ints+' deep-work interruption'+(ints===1?'':'s')+' this week · ~5 min to refocus each' : 'Long, uninterrupted focus accrues no debt — keep it up.';
-  $('debtPanel').innerHTML =
-    '<h2>Focus Debt · this week</h2>'+
-    '<div class="debt-row">'+
-      '<div class="debt-bigwrap"><span class="debt-big">'+num+'</span><span class="debt-unit">'+unit+'</span></div>'+
-      '<div class="debt-meta"><div class="debt-equiv">'+equiv+'</div>'+money+'<div class="debt-sub">'+sub+'</div></div>'+
-    '</div>'+
-    '<div class="debt-note">Like technical debt in code, every interrupted deep-work session compounds. This is the productive time fragmentation actually cost you this week. Lost focus is lost money.</div>';
 })();
 
 $('gen').textContent=new Date().toLocaleString();

@@ -43,15 +43,16 @@ enum FocusScore {
 
     // --- Tunable constants -------------------------------------------------
     /// Average block length (minutes) that earns a perfect "sustain" sub-score.
-    static let sustainTargetMinutes = 20.0
+    static let sustainTargetMinutes = 10.0
     /// Switch-rate decay: higher = more forgiving of frequent switching.
-    static let switchDecay = 15.0
+    static let switchDecay = 30.0
     /// Longest unbroken block (minutes) that earns a perfect "deep work" sub-score.
-    static let deepWorkTargetMinutes = 45.0
+    static let deepWorkTargetMinutes = 25.0
     /// A block must be at least this long (and deep-work category) to count as "deep work".
-    static let deepWorkMinMinutes = 15.0
-    /// Need at least this much active time before a score is meaningful.
-    static let minActiveSeconds = 300.0
+    static let deepWorkMinMinutes = 12.0
+    /// Need at least this much active time before a score is meaningful (~3 min,
+    /// so a short focused session still gets scored).
+    static let minActiveSeconds = 180.0
     // -----------------------------------------------------------------------
 
     static func analyze(_ raw: [FocusSession]) -> DayStats {
@@ -94,11 +95,13 @@ enum FocusScore {
         let deepWork = min(100, longestMinutes / deepWorkTargetMinutes * 100)
         let score = Int((0.40 * sustain + 0.35 * switchScore + 0.25 * deepWork).rounded())
 
-        // 5. Distraction leaderboard: rank the apps that fragment you most,
-        //    by how often you switch into them (then by total time).
+        // 5. Distraction leaderboard: rank only true distractions (Twitter, YouTube,
+        //    Reddit, etc.) by how often you switch into them (then by total time).
+        //    Communication apps (Slack, Mail, …) are necessary work, not distractions,
+        //    so they're deliberately excluded here.
         var usage: [String: AppUsage] = [:]
         for (i, b) in blocks.enumerated() {
-            guard b.category == .distraction || b.category == .communication else { continue }
+            guard b.category == .distraction else { continue }
             var u = usage[b.app] ?? AppUsage(app: b.app, category: b.category, totalSeconds: 0, switchIns: 0)
             u.totalSeconds += b.duration
             if i > 0 { u.switchIns += 1 }

@@ -20,6 +20,32 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 
+    /// Test helper: render the dashboard (optionally running JS first) to a PNG.
+    func snapshotToFile(runJS: String?, _ completion: @escaping (String) -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            guard let wv = self.webView else { completion(""); return }
+            let take = {
+                let cfg = WKSnapshotConfiguration(); cfg.afterScreenUpdates = true
+                wv.takeSnapshot(with: cfg) { image, _ in
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent("scattrd-dash-test.png")
+                    if let image {
+                        var rect = CGRect(origin: .zero, size: image.size)
+                        if let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil),
+                           let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) {
+                            try? png.write(to: url)
+                        }
+                    }
+                    completion(url.path)
+                }
+            }
+            if let js = runJS {
+                wv.evaluateJavaScript(js) { _, _ in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: take)
+                }
+            } else { take() }
+        }
+    }
+
     private func build() {
         let frame = NSRect(x: 0, y: 0, width: 1320, height: 900)
 

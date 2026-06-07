@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notifier: NotificationManager!
     private var summaryScheduler: DailySummaryScheduler!
     private var nudge: FocusNudge!
+    private var streakTracker: StreakTracker!
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -26,6 +27,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
 
+        if ProcessInfo.processInfo.environment["SCATTRD_SNAP_WRAPPED"] != nil {
+            FocusWrappedWindow.shared.show(store: store)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                FocusWrappedWindow.shared.snapshotToFile { p in
+                    FileHandle.standardOutput.write(Data((p + "\n").utf8)); exit(0)
+                }
+            }
+            return
+        }
+
         monitor = ActivityMonitor(store: store)
         menu = MenuBarController(store: store)
         menu.onPauseToggle = { [weak self] paused in
@@ -37,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notifier.setUp()
         summaryScheduler = DailySummaryScheduler(store: store, notifier: notifier)
         nudge = FocusNudge(store: store, notifier: notifier)
+        streakTracker = StreakTracker(store: store, notifier: notifier)
 
         menu.onSendTestSummary = { [weak self] in
             guard let self else { return }
@@ -45,6 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.onOpenDashboard = { [weak self] in
             guard let self else { return }
             DashboardWindow.shared.show(html: Dashboard.htmlString(store: self.store))
+        }
+        menu.onOpenWrapped = { [weak self] in
+            guard let self else { return }
+            FocusWrappedWindow.shared.show(store: self.store)
         }
 
         // First sample immediately so the bar isn't blank, then poll on a timer.
@@ -66,6 +82,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--show-dashboard") {
             DashboardWindow.shared.show(html: Dashboard.htmlString(store: store))
         }
+
+        if ProcessInfo.processInfo.environment["SCATTRD_SNAP_PANEL"] != nil {
+            menu.snapshotPanel { p in FileHandle.standardOutput.write(Data((p + "\n").utf8)); exit(0) }
+        }
+
+        if ProcessInfo.processInfo.environment["SCATTRD_SNAP_DASHBOARD"] != nil {
+            DashboardWindow.shared.show(html: Dashboard.htmlString(store: store))
+            let js = ProcessInfo.processInfo.environment["SCATTRD_SNAP_JS"]
+            DashboardWindow.shared.snapshotToFile(runJS: js) { p in
+                FileHandle.standardOutput.write(Data((p + "\n").utf8)); exit(0)
+            }
+        }
     }
 
     private func tick() {
@@ -73,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.refreshTitle()
         summaryScheduler.checkAndFireIfDue()
         nudge.check()
+        streakTracker.check()
     }
 
     @objc private func activeAppChanged(_ note: Notification) {

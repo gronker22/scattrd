@@ -25,6 +25,13 @@ struct TodayPayload: Codable {
     let segments: [SegmentDTO]
     let hours: [HourDTO]
     let distractions: [DistractionDTO]
+    let streak: Int
+    let streakBest: Int
+    let streakGoal: Int
+    let goldenValid: Bool
+    let goldenLabel: String
+    let goldenStartTs: Double
+    let goldenEndTs: Double
 }
 
 struct SegmentDTO: Codable {
@@ -53,10 +60,6 @@ struct WeekPayload: Codable {
     let afternoonScore: Int        // … after noon
     let bestDay: String
     let worstDay: String
-    let debtHours: Double           // Focus Debt: productive hours lost to fragmentation this week
-    let debtInterruptions: Int
-    let debtDollars: Double
-    let debtWorkdayPct: Int         // % of an 8-hour workday
 }
 
 struct DayDTO: Codable {
@@ -66,6 +69,13 @@ struct DayDTO: Codable {
     let score: Int
     let activeMin: Double
     let isToday: Bool
+    // Full stats so a clicked day can show its detail.
+    let switches: Int
+    let avgFocus: Double
+    let longestFocus: Double
+    let deepWorkBlocks: Int
+    let verdict: String
+    let topApp: String
 }
 
 /// Builds the full dashboard payload from the database.
@@ -126,6 +136,9 @@ enum DashboardData {
             DistractionDTO(app: $0.app, switchIns: $0.switchIns, minutes: $0.totalSeconds / 60)
         }
 
+        let golden = GoldenHours.detect(store: store, now: now)
+        let goldenTodayStart = Calendar.current.startOfDay(for: now).timeIntervalSince1970
+
         let today = TodayPayload(
             hasData: stats.hasEnoughData,
             score: stats.score,
@@ -142,7 +155,14 @@ enum DashboardData {
             dayEnd: windowEnd,
             segments: segments,
             hours: hours,
-            distractions: distractions
+            distractions: distractions,
+            streak: FocusStreak.current(store: store, threshold: Settings.streakThreshold, now: now),
+            streakBest: FocusStreak.best(store: store, threshold: Settings.streakThreshold, now: now),
+            streakGoal: Settings.streakThreshold,
+            goldenValid: golden.valid,
+            goldenLabel: golden.label,
+            goldenStartTs: goldenTodayStart + Double(golden.startHour) * 3600,
+            goldenEndTs: goldenTodayStart + Double(golden.endHour) * 3600
         )
 
         let df = DateFormatter(); df.dateFormat = "EEEE, MMM d"
@@ -161,7 +181,6 @@ enum DashboardData {
         var bestDay = "—", worstDay = "—"
         var morningDeep = 0.0, morningActive = 0.0
         var afternoonDeep = 0.0, afternoonActive = 0.0
-        var debtHours = 0.0, debtInterruptions = 0
 
         for offset in stride(from: 6, through: 0, by: -1) {
             guard let dayDate = cal.date(byAdding: .day, value: -offset, to: now) else { continue }
@@ -174,7 +193,13 @@ enum DashboardData {
                 hasData: st.hasEnoughData,
                 score: st.score,
                 activeMin: st.activeMinutes,
-                isToday: cal.isDate(dayDate, inSameDayAs: now)
+                isToday: cal.isDate(dayDate, inSameDayAs: now),
+                switches: st.switches,
+                avgFocus: st.avgFocusMinutes,
+                longestFocus: st.longestFocusMinutes,
+                deepWorkBlocks: st.deepWorkBlocks,
+                verdict: verdict(st.score, hasData: st.hasEnoughData),
+                topApp: st.topDistractions.first?.app ?? "—"
             ))
 
             if st.hasEnoughData {
@@ -193,19 +218,12 @@ enum DashboardData {
                     if b.category == .deepWork { afternoonDeep += b.duration }
                 }
             }
-
-            let d = FocusDebt.forDay(st.blocks)
-            debtHours += d.hours
-            debtInterruptions += d.interruptions
         }
 
         let morning = morningActive > 0 ? Int((morningDeep / morningActive * 100).rounded()) : 0
         let afternoon = afternoonActive > 0 ? Int((afternoonDeep / afternoonActive * 100).rounded()) : 0
         return WeekPayload(days: days, morningScore: morning, afternoonScore: afternoon,
-                           bestDay: bestDay, worstDay: worstDay,
-                           debtHours: debtHours, debtInterruptions: debtInterruptions,
-                           debtDollars: debtHours * Settings.hourlyRate,
-                           debtWorkdayPct: Int((debtHours / FocusDebt.workdayHours * 100).rounded()))
+                           bestDay: bestDay, worstDay: worstDay)
     }
 
     private static func verdict(_ score: Int, hasData: Bool) -> String {

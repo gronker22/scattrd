@@ -53,17 +53,50 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         post(DailyInsight(title: pick.0, subtitle: pick.1, body: ""), id: "nudge")
     }
 
+    /// Streak-broken notification.
+    func postStreakBroken(length: Int) {
+        post(DailyInsight(title: "💔 Streak ended",
+                          subtitle: "Your \(length)-day focus streak just broke.",
+                          body: "Clear \(Settings.streakThreshold)/100 today to start a new one."),
+             id: "streak-broken")
+    }
+
     private func post(_ insight: DailyInsight, id: String) {
         guard available else { return }
+        let center = UNUserNotificationCenter.current()
+        // Check current status; if not determined or denied, re-request first.
+        center.getNotificationSettings { [weak self] settings in
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .authorized, .provisional, .ephemeral:
+                    self?.deliver(insight, id: id, to: center)
+                case .notDetermined:
+                    // Prompt hasn't been answered yet — request now, then deliver.
+                    center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                        DispatchQueue.main.async {
+                            self?.authorized = granted
+                            if granted { self?.deliver(insight, id: id, to: center) }
+                        }
+                    }
+                case .denied:
+                    // Silently skip — user explicitly denied; don't spam the Settings alert.
+                    break
+                @unknown default:
+                    break
+                }
+            }
+        }
+    }
+
+    private func deliver(_ insight: DailyInsight, id: String, to center: UNUserNotificationCenter) {
         let content = UNMutableNotificationContent()
         content.title = insight.title
         content.subtitle = insight.subtitle
         content.body = insight.body
         content.sound = .default
-        // nil trigger = deliver immediately, with content computed right now.
         let request = UNNotificationRequest(identifier: "\(id)-\(UUID().uuidString)",
                                             content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        center.add(request)
     }
 
     // Show the banner even when the app is "active" (it's a menubar accessory).

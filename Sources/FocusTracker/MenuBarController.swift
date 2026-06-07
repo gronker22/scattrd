@@ -11,11 +11,14 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
     var onPauseToggle: ((Bool) -> Void)?
     var onSendTestSummary: (() -> Void)?
     var onOpenDashboard: (() -> Void)?
+    var onOpenWrapped: (() -> Void)?
     private var isPaused = false
 
     private let popover = NSPopover()
     private var webView: WKWebView!
     private var eventMonitor: Any?
+    private var snapWindow: NSWindow?
+    private var snapWebView: WKWebView?
 
     init(store: Database) {
         self.store = store
@@ -63,7 +66,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
 
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 560), configuration: cfg)
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 630), configuration: cfg)
         if #available(macOS 12.0, *) {
             wv.underPageBackgroundColor = NSColor(red: 0.04, green: 0.045, blue: 0.06, alpha: 1)
         }
@@ -72,7 +75,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         let vc = NSViewController()
         vc.view = wv
         popover.contentViewController = vc
-        popover.contentSize = NSSize(width: 344, height: 560)
+        popover.contentSize = NSSize(width: 344, height: 630)
         popover.behavior = .applicationDefined   // we manage closing via an event monitor
         popover.animates = true
         popover.appearance = NSAppearance(named: .darkAqua)   // keep the popover chrome dark, not white
@@ -106,6 +109,34 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     private func reloadPanel() { webView.loadHTMLString(panelHTML(), baseURL: nil) }
 
+    /// Test helper: render the popover panel to a PNG.
+    func snapshotPanel(_ completion: @escaping (String) -> Void) {
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 630))
+        snapWebView = wv
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 344, height: 630),
+                           styleMask: [.borderless], backing: .buffered, defer: false)
+        win.contentView = wv
+        win.alphaValue = 0.02
+        win.orderFront(nil)
+        snapWindow = win
+        wv.loadHTMLString(panelHTML(), baseURL: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.3) {
+            let cfg = WKSnapshotConfiguration(); cfg.afterScreenUpdates = true
+            wv.takeSnapshot(with: cfg) { image, _ in
+                let url = FileManager.default.temporaryDirectory.appendingPathComponent("scattrd-panel-test.png")
+                if let image {
+                    var rect = CGRect(origin: .zero, size: image.size)
+                    if let cg = image.cgImage(forProposedRect: &rect, context: nil, hints: nil),
+                       let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) {
+                        try? png.write(to: url)
+                    }
+                }
+                win.close()
+                completion(url.path)
+            }
+        }
+    }
+
     private func showFallbackMenu() {
         let menu = NSMenu()
         let dash = NSMenuItem(title: "Open Dashboard…", action: #selector(fmDashboard), keyEquivalent: "")
@@ -126,6 +157,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         guard let action = message.body as? String else { return }
         switch action {
         case "dashboard": closePopover(); onOpenDashboard?()
+        case "wrapped":   closePopover(); onOpenWrapped?()
         case "test":      onSendTestSummary?()
         case "pause":     isPaused.toggle(); onPauseToggle?(isPaused); reloadPanel()
         case "login":     LoginItem.setEnabled(!LoginItem.isEnabled); reloadPanel()
@@ -134,6 +166,9 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             if Settings.tabTrackingEnabled { BrowserTabReader.resetPermissionCache() }
             reloadPanel()
         case "nudge":     Settings.nudgeEnabled.toggle(); reloadPanel()
+        case "goalUp":    Settings.streakThreshold += 5; reloadPanel()
+        case "goalDown":  Settings.streakThreshold -= 5; reloadPanel()
+        case "streakSeen": Settings.streakJustBroke = false   // clear after the break animation plays
         case "quit":      NSApp.terminate(nil)
         default: break
         }
@@ -166,19 +201,22 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     private func panelHTML() -> String {
         let s = FocusScore.today(store)
-        let debt = FocusDebt.forWeek(store: store)
         let dists = s.topDistractions.prefix(3).map {
             ["app": $0.app, "ints": $0.switchIns] as [String: Any]
         }
+        let threshold = Settings.streakThreshold
         let obj: [String: Any] = [
             "hasData": s.hasEnoughData, "score": s.score, "verdict": scoreVerdict(s.score),
             "switches": s.switches, "avg": s.avgFocusMinutes, "longest": s.longestFocusMinutes,
             "deep": s.deepWorkBlocks,
-            "debtH": debt.hoursLost, "debtPct": Int((debt.workdayFraction * 100).rounded()),
-            "debtUSD": debt.dollarsLost, "debtInts": debt.interruptions,
             "dists": dists,
             "tabsOn": Settings.tabTrackingEnabled, "loginOn": LoginItem.isEnabled, "paused": isPaused,
             "nudgeOn": Settings.nudgeEnabled,
+            "streak": FocusStreak.current(store: store, threshold: threshold),
+            "streakBest": FocusStreak.best(store: store, threshold: threshold),
+            "streakGoal": threshold,
+            "streakBroke": Settings.streakJustBroke,
+            "streakBrokeLen": Settings.brokenStreakLength,
         ]
         let json = (try? JSONSerialization.data(withJSONObject: obj))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
@@ -201,13 +239,6 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
   .ring .v{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:740}
   .hd .vd{font-size:14.5px;font-weight:670;letter-spacing:-.01em}
   .hd .tdy{font-size:11px;color:var(--muted);margin-top:1px}
-  .debt{padding:12px 13px;margin-bottom:12px;border-color:rgba(251,113,133,.28);
-    background:linear-gradient(135deg,rgba(251,113,133,.14),rgba(168,85,247,.05))}
-  .debt .lbl{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#fda4af;font-weight:650}
-  .debt .row{display:flex;align-items:baseline;gap:6px;margin-top:3px}
-  .debt .big{font-size:30px;font-weight:780;letter-spacing:-.02em;color:#fb7185}
-  .debt .eq{font-size:12px;color:var(--muted)}
-  .debt .usd{font-size:12px;color:#fda4af;font-weight:600;margin-top:2px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
   .cell{padding:9px 11px}
   .cell .n{font-size:17px;font-weight:720;font-variant-numeric:tabular-nums}
@@ -230,6 +261,20 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
   .ghost:hover{border-color:rgba(255,255,255,.22)}
   .quit{background:transparent;color:var(--muted);font-weight:540;padding:6px}
   .quit:hover{color:var(--red)}
+  .streak{display:flex;align-items:center;gap:11px;padding:11px 13px;margin-bottom:12px;border-radius:13px;
+    background:linear-gradient(135deg,rgba(251,146,60,.16),rgba(251,113,133,.05));border:1px solid rgba(251,146,60,.28)}
+  .streak.broke{background:linear-gradient(135deg,rgba(251,113,133,.20),rgba(120,80,90,.06));border-color:rgba(251,113,133,.42)}
+  .sflame{font-size:26px;line-height:1;flex:0 0 auto}
+  .smeta{flex:1;min-width:0}
+  .snum{font-size:20px;font-weight:760;letter-spacing:-.02em}
+  .snum .su{font-size:12px;font-weight:600;color:var(--muted)}
+  .ssub{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .goal{display:flex;align-items:center;gap:5px;flex:0 0 auto}
+  .goal .gl{font-size:10px;color:var(--muted);margin-right:2px}
+  .gb{width:22px;height:21px;padding:0;font-size:14px;line-height:1;border-radius:7px;background:var(--card);border:1px solid var(--brd);color:var(--text)}
+  .gb:hover{border-color:rgba(255,255,255,.28)}
+  @keyframes shatter{0%{transform:translateX(0)}15%{transform:translateX(-6px) rotate(-1deg)}30%{transform:translateX(6px) rotate(1deg)}45%{transform:translateX(-4px)}60%{transform:translateX(4px)}75%{transform:translateX(-2px)}100%{transform:translateX(0)}}
+  .streak.shatter{animation:shatter .6s cubic-bezier(.36,.07,.19,.97)}
 </style></head>
 <body>
 <div id="root"></div>
@@ -246,22 +291,26 @@ function ring(){
     'stroke-dasharray="'+c+'" stroke-dashoffset="'+(c*(1-(P.hasData?s/100:0)))+'"/></svg>'+
     '<div class="v" style="color:'+col+'">'+(P.hasData?s:'–')+'</div></div>';
 }
-function debtBox(){
-  const h=P.debtH,num=h>=1?fmt(h)+'h':Math.round(h*60)+'m';
-  const eq=P.debtPct>=100?'≈ '+(P.debtPct/100).toFixed(1)+' workdays':P.debtInts>0?'≈ '+Math.max(1,P.debtPct)+'% of a workday':'no deep-work interruptions yet';
-  const usd=P.debtUSD>=1?'<div class="usd">≈ $'+Math.round(P.debtUSD).toLocaleString()+' of focus lost</div>':'';
-  return '<div class="glass debt"><div class="lbl">Focus Debt · this week</div>'+
-    '<div class="row"><div class="big">'+num+'</div><div class="eq">'+eq+'</div></div>'+usd+'</div>';
-}
 function cell(n,l){return '<div class="glass cell"><div class="n">'+n+'</div><div class="l">'+l+'</div></div>';}
 function tog(label,on,act){return '<div class="glass tog" onclick="send(\''+act+'\')"><div class="t">'+label+'</div>'+
   '<div class="pill '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</div></div>';}
 let dl='';
 if(P.dists.length){ dl=P.dists.map(d=>'<div class="drow"><span>'+d.app+'</span><span class="dm">'+d.ints+'×</span></div>').join(''); }
 else { dl='<div class="empty">'+(P.hasData?'None — nicely focused 👏':'—')+'</div>'; }
+function streakBanner(){
+  const goal='<div class="goal"><span class="gl">goal ≥'+P.streakGoal+'</span>'+
+    '<button class="gb" onclick="send(\'goalDown\')">−</button><button class="gb" onclick="send(\'goalUp\')">+</button></div>';
+  if(P.streakBroke){
+    return '<div class="streak broke" id="streakEl"><div class="sflame">💔</div>'+
+      '<div class="smeta"><div class="snum">'+P.streakBrokeLen+'-day streak ended</div><div class="ssub">start a new one today</div></div>'+goal+'</div>';
+  }
+  return '<div class="streak" id="streakEl"><div class="sflame">'+(P.streak>0?'🔥':'·')+'</div>'+
+    '<div class="smeta"><div class="snum">'+P.streak+' <span class="su">day'+(P.streak===1?'':'s')+'</span></div>'+
+    '<div class="ssub">'+(P.streak>0?'focus streak · best '+P.streakBest:'no streak yet · best '+P.streakBest)+'</div></div>'+goal+'</div>';
+}
 document.getElementById('root').innerHTML =
   '<div class="hd">'+ring()+'<div><div class="vd">'+(P.hasData?P.verdict:'Warming up…')+'</div><div class="tdy">Today\'s focus</div></div></div>'+
-  debtBox()+
+  streakBanner()+
   '<div class="grid">'+cell(P.switches,'switches')+cell(fmt(P.avg)+'m','avg block')+cell(fmt(P.longest)+'m','longest')+cell(P.deep,'deep blocks')+'</div>'+
   '<div class="sec">Top distractions</div>'+dl+
   '<div style="height:10px"></div>'+
@@ -270,8 +319,10 @@ document.getElementById('root').innerHTML =
   tog('Nudge me when scattered',P.nudgeOn,'nudge')+
   tog(P.paused?'Tracking paused':'Tracking active',!P.paused,'pause')+
   '<div class="btns"><button class="primary" onclick="send(\'dashboard\')">Open Full Dashboard</button>'+
+  '<button class="ghost" onclick="send(\'wrapped\')">Focus Wrapped ✨</button>'+
   '<button class="ghost" onclick="send(\'test\')">Send Test Summary</button>'+
   '<button class="quit" onclick="send(\'quit\')">Quit scattrd</button></div>';
+if(P.streakBroke){ const el=document.getElementById('streakEl'); if(el) el.classList.add('shatter'); send('streakSeen'); }
 </script>
 </body></html>
 """#
