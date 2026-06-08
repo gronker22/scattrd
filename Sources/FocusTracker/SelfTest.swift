@@ -17,6 +17,10 @@ enum SelfTest {
             "http://localhost:3000/dashboard",
             "https://www.google.com/search?q=swift",
             "chrome://settings/passwords",
+            "https://watchluna.com/movie/inception",
+            "https://freeslots-casino.net/play",
+            "https://coolmathgames.com/0-run",
+            "https://streamlit.io/docs",
         ]
         print("DOMAIN EXTRACTION + CATEGORIZATION")
         print(String(repeating: "-", count: 52))

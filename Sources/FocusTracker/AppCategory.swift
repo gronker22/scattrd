@@ -69,6 +69,21 @@ enum AppCatalog {
             || h == "localhost" || h == "127.0.0.1" {
             return .deepWork
         }
+
+        // Heuristic: catch random streaming / piracy / gaming / gambling / adult
+        // sites by name pattern (watchluna.com, freemovies.cc, slots-vegas, …),
+        // since they'll never be in the explicit lists above.
+        func hasAny(_ needles: [String]) -> Bool { needles.contains { h.contains($0) } }
+        if h.hasSuffix(".tv") || hasAny([
+            "watch", "movie", "flix", "tube", "anime", "manga", "hentai", "cartoon",
+            "putlocker", "123movie", "soap2day", "fmovies", "gomovies", "yesmovies",
+            "solarmovie", "primewire", "couchtuner", "lookmovie", "sflix", "hdtoday", "myflixer",
+            "porn", "xxx", "xnxx", "xvideos", "redtube", "onlyfans", "nsfw", "camgirl",
+            "casino", "gambl", "poker", "slots", "roulette", "bet365", "betting", "sportsbook",
+            "game", "gaming",
+        ]) {
+            return .distraction
+        }
         return .neutral
     }
 }
