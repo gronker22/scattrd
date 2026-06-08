@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var summaryScheduler: DailySummaryScheduler!
     private var nudge: FocusNudge!
     private var streakTracker: StreakTracker!
+    private var forecastScheduler: ForecastScheduler!
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -50,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         nudge = FocusNudge(store: store, notifier: notifier)
         streakTracker = StreakTracker(store: store, notifier: notifier)
         if Settings.calendarEnabled { CalendarService.shared.requestAccess() }
+        forecastScheduler = ForecastScheduler(store: store, notifier: notifier)
 
         menu.onSendTestSummary = { [weak self] in
             guard let self else { return }
@@ -103,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         summaryScheduler.checkAndFireIfDue()
         nudge.check()
         streakTracker.check()
+        forecastScheduler.check()
     }
 
     @objc private func activeAppChanged(_ note: Notification) {

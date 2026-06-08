@@ -18,6 +18,8 @@ enum Settings {
         static let streakBroke = "streak.justBroke"
         static let streakBrokeLen = "streak.brokenLength"
         static let calendar = "calendar.enabled"
+        static let forecast = "forecast.enabled"
+        static let forecastDay = "forecast.lastDay"
     }
 
     static var summaryEnabled: Bool {
@@ -80,6 +82,16 @@ enum Settings {
     static var calendarEnabled: Bool {
         get { d.bool(forKey: Key.calendar) }
         set { d.set(newValue, forKey: Key.calendar) }
+    }
+
+    /// Evening next-day focus forecast.
+    static var forecastEnabled: Bool {
+        get { d.object(forKey: Key.forecast) as? Bool ?? true }
+        set { d.set(newValue, forKey: Key.forecast) }
+    }
+    static var lastForecastDay: String? {
+        get { d.string(forKey: Key.forecastDay) }
+        set { d.set(newValue, forKey: Key.forecastDay) }
     }
 
     static var summaryTimeString: String {

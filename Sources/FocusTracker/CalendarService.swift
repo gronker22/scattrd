@@ -35,6 +35,19 @@ final class CalendarService {
             .sorted { $0.startDate < $1.startDate }
     }
 
+    /// Creates a "Deep Work" event in the default calendar. Needs write (full) access.
+    @discardableResult
+    func createDeepWorkBlock(start: Date, end: Date) -> Bool {
+        guard isAuthorized, let calendar = store.defaultCalendarForNewEvents else { return false }
+        let ev = EKEvent(eventStore: store)
+        ev.title = "Deep Work"
+        ev.notes = "Blocked by scattrd — your peak focus window."
+        ev.startDate = start
+        ev.endDate = end
+        ev.calendar = calendar
+        do { try store.save(ev, span: .thisEvent); return true } catch { return false }
+    }
+
     private func declined(_ ev: EKEvent) -> Bool {
         guard let me = ev.attendees?.first(where: { $0.isCurrentUser }) else { return false }
         return me.participantStatus == .declined

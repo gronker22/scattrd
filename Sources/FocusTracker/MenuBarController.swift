@@ -13,6 +13,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
     var onOpenDashboard: (() -> Void)?
     var onOpenWrapped: (() -> Void)?
     private var isPaused = false
+    private var justBlocked = false
 
     private let popover = NSPopover()
     private var webView: WKWebView!
@@ -66,7 +67,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
 
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 690), configuration: cfg)
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 770), configuration: cfg)
         if #available(macOS 12.0, *) {
             wv.underPageBackgroundColor = NSColor(red: 0.04, green: 0.045, blue: 0.06, alpha: 1)
         }
@@ -75,7 +76,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         let vc = NSViewController()
         vc.view = wv
         popover.contentViewController = vc
-        popover.contentSize = NSSize(width: 344, height: 690)
+        popover.contentSize = NSSize(width: 344, height: 770)
         popover.behavior = .applicationDefined   // we manage closing via an event monitor
         popover.animates = true
         popover.appearance = NSAppearance(named: .darkAqua)   // keep the popover chrome dark, not white
@@ -94,6 +95,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
+        justBlocked = false
         webView.loadHTMLString(panelHTML(), baseURL: nil)
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -111,9 +113,9 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     /// Test helper: render the popover panel to a PNG.
     func snapshotPanel(_ completion: @escaping (String) -> Void) {
-        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 690))
+        let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 344, height: 770))
         snapWebView = wv
-        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 344, height: 690),
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 344, height: 770),
                            styleMask: [.borderless], backing: .buffered, defer: false)
         win.contentView = wv
         win.alphaValue = 0.02
@@ -170,6 +172,21 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             Settings.calendarEnabled.toggle()
             if Settings.calendarEnabled { CalendarService.shared.requestAccess { [weak self] _ in self?.reloadPanel() } }
             reloadPanel()
+        case "blockIt":
+            let f = FocusForecast.compute(store: store)
+            if CalendarService.shared.isAuthorized {
+                justBlocked = CalendarService.shared.createDeepWorkBlock(start: f.blockStart, end: f.blockEnd)
+                reloadPanel()
+            } else {
+                CalendarService.shared.requestAccess { [weak self] granted in
+                    guard let self else { return }
+                    if granted {
+                        Settings.calendarEnabled = true
+                        self.justBlocked = CalendarService.shared.createDeepWorkBlock(start: f.blockStart, end: f.blockEnd)
+                    }
+                    self.reloadPanel()
+                }
+            }
         case "goalUp":    Settings.streakThreshold += 5; reloadPanel()
         case "goalDown":  Settings.streakThreshold -= 5; reloadPanel()
         case "streakSeen": Settings.streakJustBroke = false   // clear after the break animation plays
@@ -209,6 +226,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             ["app": $0.app, "ints": $0.switchIns] as [String: Any]
         }
         let threshold = Settings.streakThreshold
+        let fc = FocusForecast.compute(store: store)
         let obj: [String: Any] = [
             "hasData": s.hasEnoughData, "score": s.score, "verdict": scoreVerdict(s.score),
             "switches": s.switches, "avg": s.avgFocusMinutes, "longest": s.longestFocusMinutes,
@@ -217,6 +235,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "tabsOn": Settings.tabTrackingEnabled, "loginOn": LoginItem.isEnabled, "paused": isPaused,
             "nudgeOn": Settings.nudgeEnabled,
             "calOn": Settings.calendarEnabled,
+            "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel, "justBlocked": justBlocked,
             "streak": FocusStreak.current(store: store, threshold: threshold),
             "streakBest": FocusStreak.best(store: store, threshold: threshold),
             "streakGoal": threshold,
@@ -280,6 +299,13 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
   .gb:hover{border-color:rgba(255,255,255,.28)}
   @keyframes shatter{0%{transform:translateX(0)}15%{transform:translateX(-6px) rotate(-1deg)}30%{transform:translateX(6px) rotate(1deg)}45%{transform:translateX(-4px)}60%{transform:translateX(4px)}75%{transform:translateX(-2px)}100%{transform:translateX(0)}}
   .streak.shatter{animation:shatter .6s cubic-bezier(.36,.07,.19,.97)}
+  .fcast{padding:11px 13px;margin-bottom:12px;border-radius:13px;
+    background:linear-gradient(135deg,rgba(91,140,255,.16),rgba(168,85,247,.06));border:1px solid rgba(91,140,255,.3)}
+  .fc-hd{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9db4ff;font-weight:650}
+  .fc-body{font-size:12px;margin:4px 0 9px;line-height:1.4}
+  .fc-btn{width:100%;padding:8px;border-radius:9px;background:rgba(91,140,255,.92);border:0;color:#fff;font:inherit;font-weight:600;cursor:pointer;font-size:12px}
+  .fc-btn:hover{filter:brightness(1.1)}
+  .fc-ok{font-size:12px;color:#34d399;font-weight:600;text-align:center;padding:6px}
 </style></head>
 <body>
 <div id="root"></div>
@@ -313,9 +339,17 @@ function streakBanner(){
     '<div class="smeta"><div class="snum">'+P.streak+' <span class="su">day'+(P.streak===1?'':'s')+'</span></div>'+
     '<div class="ssub">'+(P.streak>0?'focus streak · best '+P.streakBest:'no streak yet · best '+P.streakBest)+'</div></div>'+goal+'</div>';
 }
+function forecastCard(){
+  if(!P.fcValid) return '';
+  const action = P.justBlocked
+    ? '<div class="fc-ok">✓ Deep Work added to tomorrow\'s calendar</div>'
+    : '<button class="fc-btn" onclick="send(\'blockIt\')">🔒 Block Deep Work · '+P.fcBlock+'</button>';
+  return '<div class="fcast"><div class="fc-hd">🔮 Tomorrow</div><div class="fc-body">'+P.fcText+'</div>'+action+'</div>';
+}
 document.getElementById('root').innerHTML =
   '<div class="hd">'+ring()+'<div><div class="vd">'+(P.hasData?P.verdict:'Warming up…')+'</div><div class="tdy">Today\'s focus</div></div></div>'+
   streakBanner()+
+  forecastCard()+
   '<div class="grid">'+cell(P.switches,'switches')+cell(fmt(P.avg)+'m','avg block')+cell(fmt(P.longest)+'m','longest')+cell(P.deep,'deep blocks')+'</div>'+
   '<div class="sec">Top distractions</div>'+dl+
   '<div style="height:10px"></div>'+

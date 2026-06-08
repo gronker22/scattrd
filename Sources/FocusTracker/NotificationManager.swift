@@ -23,6 +23,9 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         available = true
         let center = UNUserNotificationCenter.current()
         center.delegate = self
+        let block = UNNotificationAction(identifier: "BLOCK_IT", title: "Block it 🔒", options: [])
+        center.setNotificationCategories([UNNotificationCategory(identifier: "FORECAST", actions: [block],
+                                                                 intentIdentifiers: [], options: [])])
         center.requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
             DispatchQueue.main.async { self?.authorized = granted }
         }
@@ -59,6 +62,25 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                           subtitle: "Your \(length)-day focus streak just broke.",
                           body: "Clear \(Settings.streakThreshold)/100 today to start a new one."),
              id: "streak-broken")
+    }
+
+    /// Evening next-day forecast, with a "Block it" action button.
+    func postForecast(_ f: Forecast) {
+        guard available, f.valid else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Tomorrow's focus plan"
+        content.body = f.headline
+        content.sound = .default
+        content.categoryIdentifier = "FORECAST"
+        content.userInfo = ["blockStart": f.blockStart.timeIntervalSince1970,
+                            "blockEnd": f.blockEnd.timeIntervalSince1970]
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+                center.add(UNNotificationRequest(identifier: "forecast-\(UUID().uuidString)", content: content, trigger: nil))
+            }
+        }
     }
 
     private func post(_ insight: DailyInsight, id: String) {
@@ -110,7 +132,15 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        DispatchQueue.main.async { [weak self] in self?.onOpenSummary?() }
+        if response.actionIdentifier == "BLOCK_IT" {
+            let info = response.notification.request.content.userInfo
+            if let s = info["blockStart"] as? Double, let e = info["blockEnd"] as? Double {
+                CalendarService.shared.createDeepWorkBlock(start: Date(timeIntervalSince1970: s),
+                                                           end: Date(timeIntervalSince1970: e))
+            }
+        } else {
+            DispatchQueue.main.async { [weak self] in self?.onOpenSummary?() }
+        }
         completionHandler()
     }
 }
