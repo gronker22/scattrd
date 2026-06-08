@@ -40,10 +40,10 @@ final class FocusWrappedWindow: NSObject, NSWindowDelegate {
         bar.wantsLayer = true
         bar.layer?.backgroundColor = NSColor(red: 0.06, green: 0.07, blue: 0.09, alpha: 1).cgColor
 
-        segmented = NSSegmentedControl(labels: ["This Month", "This Year"],
+        segmented = NSSegmentedControl(labels: ["This Month", "This Year", "Villain 🦹"],
                                        trackingMode: .selectOne, target: self, action: #selector(periodChanged))
         segmented.selectedSegment = 0
-        segmented.frame = NSRect(x: 16, y: (barH - 24) / 2, width: 200, height: 24)
+        segmented.frame = NSRect(x: 16, y: (barH - 24) / 2, width: 296, height: 24)
         bar.addSubview(segmented)
 
         shareButton = NSButton(title: "Share", target: self, action: #selector(share))
@@ -68,11 +68,21 @@ final class FocusWrappedWindow: NSObject, NSWindowDelegate {
 
     private func reload() {
         guard let store else { return }
-        webView.loadHTMLString(FocusWrapped.cardHTML(store: store, period: period), baseURL: nil)
+        let html: String
+        switch segmented.selectedSegment {
+        case 2:  html = VillainAnalysis.cardHTML(store: store)
+        case 1:  html = FocusWrapped.cardHTML(store: store, period: .year)
+        default: html = FocusWrapped.cardHTML(store: store, period: .month)
+        }
+        webView.loadHTMLString(html, baseURL: nil)
     }
 
-    @objc private func periodChanged() {
-        period = segmented.selectedSegment == 0 ? .month : .year
+    @objc private func periodChanged() { reload() }
+
+    /// Test helper: switch tabs.
+    func selectSegment(_ i: Int) {
+        guard window != nil else { return }
+        segmented.selectedSegment = i
         reload()
     }
 

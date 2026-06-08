@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if ProcessInfo.processInfo.environment["SCATTRD_SNAP_WRAPPED"] != nil {
             FocusWrappedWindow.shared.show(store: store)
+            if let seg = ProcessInfo.processInfo.environment["SCATTRD_SNAP_SEGMENT"], let i = Int(seg) {
+                FocusWrappedWindow.shared.selectSegment(i)
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
                 FocusWrappedWindow.shared.snapshotToFile { p in
                     FileHandle.standardOutput.write(Data((p + "\n").utf8)); exit(0)
