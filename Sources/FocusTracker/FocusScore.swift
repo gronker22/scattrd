@@ -80,7 +80,14 @@ enum FocusScore {
         }
 
         // 3. Headline metrics.
-        let switches = max(0, blocks.count - 1)
+        // A context switch only counts when you land in a NON-work context
+        // (neutral or distraction). Hopping between deep-work / communication
+        // tools is normal work — using info across sites — so it's free.
+        var switches = 0
+        for i in 1..<max(1, blocks.count) {
+            let dest = blocks[i].category
+            if dest != .deepWork && dest != .communication { switches += 1 }
+        }
         let activeHours = activeSeconds / 3600
         let switchesPerHour = activeHours > 0 ? Double(switches) / activeHours : 0
         let avgBlockMinutes = (activeSeconds / Double(blocks.count)) / 60

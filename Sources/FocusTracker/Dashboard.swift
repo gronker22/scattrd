@@ -125,12 +125,7 @@ enum Dashboard {
   .mtg-sub{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:650;margin-bottom:6px}
   .mtg-hint{color:var(--muted);font-size:13px;padding:8px 0;line-height:1.6}
   .mtg-hint .sub{font-size:12px;margin-top:4px;color:var(--faint)}
-  .curve{position:relative;height:140px;border-bottom:1px solid var(--brd)}
-  .cbar{position:absolute;bottom:0}
-  .cbar .act{position:absolute;bottom:0;left:9%;right:9%;background:rgba(255,255,255,.07);border-radius:4px 4px 0 0}
-  .cbar .deep{position:absolute;bottom:0;left:9%;right:9%;border-radius:4px 4px 0 0;
-    background:linear-gradient(180deg,#34d399,#0ea5a3);box-shadow:0 0 14px -2px rgba(52,211,153,.6)}
-  .strip{position:relative;height:96px;margin-top:18px;border-radius:14px;overflow:hidden;
+  .strip{position:relative;height:120px;margin-top:4px;border-radius:14px;overflow:hidden;
     background:rgba(255,255,255,.025);border:1px solid var(--brd)}
   .seg{position:absolute;top:0;bottom:0;min-width:2px;opacity:0;animation:segIn .5s ease forwards}
   .seg:hover{filter:brightness(1.25)}
@@ -218,7 +213,6 @@ enum Dashboard {
     <div class="golden" id="golden"></div>
     <div class="replay" id="replay">
       <div class="mtgrow" id="mtgrow"></div>
-      <div class="curve" id="curve"></div>
       <div class="strip" id="strip"></div>
       <div class="scrub" id="scrub"><div class="rd" id="rd"></div></div>
       <div class="axis" id="axis"></div>
@@ -308,18 +302,6 @@ setTimeout(()=>document.querySelectorAll('.spark i').forEach(i=>i.style.width=i.
 
 // ---- Focus Replay ----
 const span=Math.max(1,T.dayEnd-T.dayStart), xPct=ts=>(ts-T.dayStart)/span*100;
-(function(){
-  const maxA=Math.max(1,...T.hours.map(h=>h.activeMin));
-  let html='';
-  for(let t=Math.floor(T.dayStart/3600)*3600; t<T.dayEnd; t+=3600){
-    const h=new Date(t*1000).getHours(), rec=T.hours[h]||{activeMin:0,deepMin:0};
-    const l=xPct(t), w=Math.max(0,xPct(t+3600)-xPct(t));
-    html+='<div class="cbar" style="left:'+l+'%;width:'+w+'%;height:100%">'+
-      '<div class="act" style="height:'+(rec.activeMin/maxA*100)+'%"></div>'+
-      '<div class="deep" style="height:'+(rec.deepMin/maxA*100)+'%"></div></div>';
-  }
-  $('curve').innerHTML=html;
-})();
 $('strip').innerHTML = T.segments.map((s,i)=>{
   const l=xPct(s.start), w=Math.max(0.18,xPct(s.end)-xPct(s.start));
   return '<div class="seg" data-app="'+encodeURIComponent(s.app)+'" data-s="'+s.start+'" data-e="'+s.end+'" '+
@@ -339,7 +321,6 @@ if(T.goldenValid){
   const gl=Math.max(0,xPct(T.goldenStartTs)), gr=Math.min(100,xPct(T.goldenEndTs));
   if(gr>gl){
     const band='<div class="goldband" style="left:'+gl+'%;width:'+(gr-gl)+'%"></div>';
-    $('curve').insertAdjacentHTML('afterbegin',band);
     $('strip').insertAdjacentHTML('afterbegin',band);
   }
 }
