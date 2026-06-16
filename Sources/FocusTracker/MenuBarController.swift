@@ -220,6 +220,16 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     // MARK: - Panel HTML
 
+    /// True only in debug builds. build_app.sh ships `swiftc -O` (no -DDEBUG),
+    /// so this is false in production — keeping dev-only controls out of the menu.
+    private static var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     private func panelHTML() -> String {
         let s = FocusScore.today(store)
         let dists = s.topDistractions.prefix(3).map {
@@ -234,6 +244,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "dists": dists,
             "tabsOn": Settings.tabTrackingEnabled, "loginOn": LoginItem.isEnabled, "paused": isPaused,
             "nudgeOn": Settings.nudgeEnabled,
+            "debug": Self.isDebugBuild,
             "calOn": Settings.calendarEnabled,
             "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel, "justBlocked": justBlocked,
             "streak": FocusStreak.current(store: store, threshold: threshold),
@@ -360,7 +371,7 @@ document.getElementById('root').innerHTML =
   tog(P.paused?'Tracking paused':'Tracking active',!P.paused,'pause')+
   '<div class="btns"><button class="primary" onclick="send(\'dashboard\')">Open Full Dashboard</button>'+
   '<button class="ghost" onclick="send(\'wrapped\')">Focus Wrapped ✨</button>'+
-  '<button class="ghost" onclick="send(\'test\')">Send Test Summary</button>'+
+  (P.debug ? '<button class="ghost" onclick="send(\'test\')">Send Test Summary (dev)</button>' : '')+
   '<button class="quit" onclick="send(\'quit\')">Quit scattrd</button></div>';
 if(P.streakBroke){ const el=document.getElementById('streakEl'); if(el) el.classList.add('shatter'); send('streakSeen'); }
 </script>

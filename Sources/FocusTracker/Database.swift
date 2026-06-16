@@ -108,10 +108,33 @@ final class Database {
         while sqlite3_step(stmt) == SQLITE_ROW {
             let app = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? "Unknown"
             let bundle = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
-            let category = AppCategory(rawValue: Int(sqlite3_column_int(stmt, 2))) ?? .neutral
+            let rawCat = AppCategory(rawValue: Int(sqlite3_column_int(stmt, 2))) ?? .neutral
+            // Apply user overrides at read time — raw DB rows are never mutated.
+            let category = CategoryOverrides.shared.effectiveCategory(for: app, default: rawCat)
             let start = sqlite3_column_double(stmt, 3)
             let end = sqlite3_column_double(stmt, 4)
             result.append(FocusSession(app: app, bundleId: bundle, category: category, start: start, end: end))
+        }
+        return result
+    }
+
+    /// Distinct app/host names seen in the last `limit` unique entries (most recent first).
+    /// Used to populate the "Customize bar" search dropdown.
+    func recentApps(limit: Int = 200) -> [(name: String, category: Int)] {
+        let sql = """
+        SELECT app, category FROM sessions
+        WHERE app NOT IN ('Idle','Unknown')
+        GROUP BY app ORDER BY MAX(start_ts) DESC LIMIT ?;
+        """
+        var stmt: OpaquePointer?
+        defer { sqlite3_finalize(stmt) }
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+        var result: [(name: String, category: Int)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let name = sqlite3_column_text(stmt, 0).map { String(cString: $0) } ?? ""
+            let cat  = Int(sqlite3_column_int(stmt, 1))
+            if !name.isEmpty { result.append((name, cat)) }
         }
         return result
     }

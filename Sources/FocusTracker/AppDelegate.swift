@@ -16,10 +16,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var timer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if ProcessInfo.processInfo.environment["SCATTRD_SELFTEST"] != nil {
-            SelfTest.run(); exit(0)
-        }
         store = Database(path: Database.standardLocation())
+        DashboardWindow.shared.configure(store: store)
+
+        if ProcessInfo.processInfo.environment["SCATTRD_SELFTEST"] != nil {
+            SelfTest.run(store: store); exit(0)
+        }
 
         // Test hook: dump the dashboard HTML and exit, without showing any UI.
         if ProcessInfo.processInfo.environment["SCATTRD_DUMP_DASHBOARD"] != nil {

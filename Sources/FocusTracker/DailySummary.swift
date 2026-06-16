@@ -23,23 +23,36 @@ func makeDailyInsight(_ s: DayStats) -> DailyInsight {
 
     func mins(_ m: Double) -> String { m >= 10 ? "\(Int(m.rounded()))" : String(format: "%.1f", m) }
 
+    // Each line is clipped so macOS shows it in full — never cut mid-word/number.
     let subtitle: String
     if let worst = s.topDistractions.first, worst.switchIns >= 12 {
-        subtitle = "\(worst.app) broke your focus \(worst.switchIns)× today"
+        subtitle = clip("\(worst.app): \(worst.switchIns) interruptions")
     } else if s.score >= 75 {
-        subtitle = "Deep, sustained focus — best stretch \(mins(s.longestFocusMinutes)) min"
+        subtitle = clip("Deep focus · best run \(mins(s.longestFocusMinutes)) min")
     } else if s.score <= 40 {
-        subtitle = "Scattered — \(s.switches) context switches today"
+        subtitle = clip("Scattered · \(s.switches) switches today")
     } else if s.longestFocusMinutes >= 30 {
-        subtitle = "Your best stretch: \(mins(s.longestFocusMinutes)) min unbroken"
+        subtitle = clip("Best stretch: \(mins(s.longestFocusMinutes)) min")
     } else {
-        subtitle = "Average focus block was just \(mins(s.avgFocusMinutes)) min"
+        subtitle = clip("Avg focus block: \(mins(s.avgFocusMinutes)) min")
     }
 
-    let blocks = "\(s.deepWorkBlocks) deep block\(s.deepWorkBlocks == 1 ? "" : "s")"
-    let body = "\(s.switches) switches · \(mins(s.avgFocusMinutes)) min avg · \(mins(s.longestFocusMinutes)) min best · \(blocks)"
+    let body = clip("\(s.switches) switches · \(mins(s.avgFocusMinutes))m avg · \(s.deepWorkBlocks) deep")
 
     return DailyInsight(title: title, subtitle: subtitle, body: body)
+}
+
+/// Max characters per notification line that macOS reliably shows in a banner
+/// without truncating — kept comfortably under the width so numbers never get cut.
+let notifMaxLine = 36
+
+/// Trim to the last whole word within the limit, adding an ellipsis only if cut.
+/// Guarantees no mid-word / mid-number truncation regardless of input length.
+func clip(_ s: String, max: Int = notifMaxLine) -> String {
+    guard s.count > max else { return s }
+    var cut = String(s.prefix(max - 1))                 // leave room for the ellipsis
+    if let space = cut.lastIndex(of: " ") { cut = String(cut[..<space]) }
+    return cut + "…"
 }
 
 /// Decides when the daily summary fires and posts it — at most once per day.

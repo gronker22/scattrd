@@ -190,6 +190,45 @@ enum Dashboard {
   footer{color:var(--faint);font-size:11.5px;text-align:center;margin-top:38px}
   .warm{padding:34px;text-align:center;color:var(--muted);margin-bottom:22px;border-radius:20px;border-style:dashed}
   .warm b{color:var(--text)}
+
+  /* ---- Customize bar ---- */
+  .ctog{display:inline-flex;align-items:center;padding:3px 10px;border-radius:9px;
+    font-size:11px;font-weight:680;cursor:pointer;transition:.2s;
+    margin-left:10px;vertical-align:2px;border:1px solid transparent}
+  .ctog.on{background:rgba(52,211,153,.16);color:var(--green);border-color:rgba(52,211,153,.3)}
+  .ctog.off{background:rgba(255,255,255,.07);color:var(--muted);border-color:var(--brd)}
+  .cust-off-note{font-size:13px;color:var(--faint);padding:2px 0 4px}
+  .cust-search{position:relative;margin-bottom:16px}
+  .cust-search input{width:100%;padding:10px 14px;border-radius:12px;
+    background:rgba(255,255,255,.06);border:1px solid var(--brd);
+    color:var(--text);font:inherit;font-size:13.5px;outline:none;transition:.2s}
+  .cust-search input:focus{border-color:var(--brd2);background:rgba(255,255,255,.08)}
+  .cust-dd{position:absolute;top:calc(100% + 5px);left:0;right:0;border-radius:12px;
+    background:#13161d;border:1px solid var(--brd2);z-index:20;overflow:hidden;
+    box-shadow:0 16px 40px -12px #000;display:none}
+  .cust-dd.open{display:block}
+  .cust-ddi{padding:10px 15px;font-size:13px;cursor:pointer;transition:.12s;
+    display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .cust-ddi:hover{background:rgba(255,255,255,.07)}
+  .cust-ddi .ddi-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cust-ddi .ddi-cat{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:650;white-space:nowrap}
+  .cust-picker-wrap{margin-bottom:16px;padding:14px;border-radius:14px;
+    background:rgba(255,255,255,.04);border:1px solid var(--brd)}
+  .cust-picker-label{font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600}
+  .cust-picker{display:flex;gap:8px;flex-wrap:wrap}
+  .cat-btn{flex:1;min-width:90px;padding:9px 6px;border-radius:10px;font:inherit;
+    font-size:12.5px;font-weight:650;cursor:pointer;border:2px solid rgba(255,255,255,.12);
+    transition:.15s;color:#fff;opacity:.75}
+  .cat-btn:hover{opacity:1;filter:brightness(1.1)}
+  .cat-btn.sel{opacity:1;border-color:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+  .cust-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .cust-chip{display:inline-flex;align-items:center;gap:7px;padding:6px 10px 6px 13px;
+    border-radius:10px;font-size:12.5px;font-weight:600;
+    background:rgba(255,255,255,.06);border:1px solid var(--brd);cursor:default}
+  .cust-chip .cc-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .cust-chip .cc-x{font-size:15px;line-height:1;cursor:pointer;color:var(--muted);
+    transition:.15s;padding:0 2px}
+  .cust-chip .cc-x:hover{color:var(--red)}
 </style>
 </head>
 <body>
@@ -239,6 +278,13 @@ enum Dashboard {
     <h2>Weekly Patterns</h2>
     <div class="week" id="week"></div>
     <div class="finger" id="finger"></div>
+  </section>
+
+  <section class="panel glass reveal" id="cust-section">
+    <h2>Customize Categories
+      <span class="ctog" id="cust-tog" onclick="custToggle()"></span>
+    </h2>
+    <div id="cust-body"></div>
   </section>
 
   <footer>🔒 All data stays on your Mac · nothing leaves this device · <span id="gen"></span></footer>
@@ -428,6 +474,180 @@ function closeDay(){ $('dayModal').classList.remove('open'); }
     html+=worst.map(w=>'<div class="mrow"><span class="mname">'+esc(w.title)+'</span><span class="mi" style="color:#fb7185">▼'+w.avgDrop+' avg · '+w.count+'×</span></div>').join('');
   }
   el.innerHTML=html;
+})();
+
+// ---- Customize bar ----
+(function(){
+  // Category metadata: rawValue, label, hex color, background for chips/buttons.
+  const CATS = [
+    { id:0, label:'Deep work',     color:'#34d399', bg:'rgba(52,211,153,.22)'  },
+    { id:1, label:'Communication', color:'#fbbf24', bg:'rgba(251,191,36,.22)'  },
+    { id:2, label:'Distraction',   color:'#fb7185', bg:'rgba(251,113,133,.22)' },
+    { id:3, label:'Neutral',       color:'#8b93a8', bg:'rgba(91,99,120,.22)'   },
+  ];
+  // catMeta by rawValue
+  const catOf = id => CATS.find(c=>c.id===id) || CATS[3];
+
+  let custEnabled = DATA.customizeEnabled;
+  let custOverrides = DATA.overrides || {};           // {name: rawInt}
+  const knownApps = DATA.knownApps || [];            // [{n,c}]
+  let selectedApp = null;                             // currently active picker target
+
+  const tog    = $('cust-tog');
+  const body   = $('cust-body');
+
+  // ---- Swift sync callback (no full reload) ----
+  window._syncCustomize = function(state){
+    custEnabled  = state.enabled;
+    custOverrides = state.overrides || {};
+    renderAll();
+  };
+
+  function send(obj){ window.webkit.messageHandlers.customize.postMessage(JSON.stringify(obj)); }
+
+  function custToggle(){
+    send({action:'customize:toggle'});
+    // Optimistic local update while Swift round-trips
+    custEnabled = !custEnabled;
+    renderAll();
+  }
+  window.custToggle = custToggle;
+
+  function custSetCat(app, catId){
+    custOverrides[app] = catId;
+    send({action:'customize:set', app, cat:catId});
+    selectedApp = null;
+    renderAll();
+  }
+  window.custSetCat = custSetCat;
+
+  function custRemove(app){
+    delete custOverrides[app];
+    send({action:'customize:remove', app});
+    if(selectedApp===app) selectedApp=null;
+    renderAll();
+  }
+  window.custRemove = custRemove;
+
+  // ---- Search / dropdown ----
+  let lastQuery = '';
+  function custSearch(q){
+    lastQuery = q;
+    renderDropdown(q);
+  }
+  window.custSearch = custSearch;
+
+  function custSelect(name){
+    selectedApp = name;
+    // Clear search box + close dropdown
+    const inp = document.getElementById('cust-inp');
+    if(inp){ inp.value = ''; }
+    lastQuery = '';
+    renderAll();
+  }
+  window.custSelect = custSelect;
+
+  function closeDropdown(){ lastQuery=''; renderDropdown(''); }
+  window.custCloseDD = closeDropdown;
+
+  function renderDropdown(q){
+    const dd = document.getElementById('cust-dd');
+    if(!dd) return;
+    const trimmed = q.trim().toLowerCase();
+    if(!trimmed){ dd.classList.remove('open'); dd.innerHTML=''; return; }
+
+    const matches = knownApps
+      .filter(a => a.n.toLowerCase().includes(trimmed))
+      .slice(0, 6);
+
+    if(!matches.length){ dd.classList.remove('open'); dd.innerHTML=''; return; }
+
+    const esc = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    dd.innerHTML = matches.map(a => {
+      const effCat = custOverrides[a.n] !== undefined ? custOverrides[a.n] : a.c;
+      const meta   = catOf(effCat);
+      return '<div class="cust-ddi" onclick="custSelect('+JSON.stringify(esc(a.n))+')">'+
+        '<span class="ddi-name">'+esc(a.n)+'</span>'+
+        '<span class="ddi-cat" style="background:'+meta.bg+';color:'+meta.color+'">'+meta.label+'</span>'+
+      '</div>';
+    }).join('');
+    dd.classList.add('open');
+  }
+
+  // ---- Render ----
+  function renderAll(){
+    // Toggle pill
+    tog.textContent = custEnabled ? 'ON' : 'OFF';
+    tog.className   = 'ctog ' + (custEnabled ? 'on' : 'off');
+
+    if(!custEnabled){
+      body.innerHTML = '<div class="cust-off-note">Category overrides are off — everything uses default classification.</div>';
+      return;
+    }
+
+    const esc = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    // Search input (preserved value)
+    let html = '<div class="cust-search">'+
+      '<input id="cust-inp" type="text" placeholder="Search apps &amp; sites you\'ve visited…" '+
+        'oninput="custSearch(this.value)" onkeydown="if(event.key===\'Escape\')custCloseDD()" '+
+        'autocomplete="off" value="'+esc(lastQuery)+'">'+
+      '<div class="cust-dd" id="cust-dd"></div>'+
+    '</div>';
+
+    // Picker — shown when an app is selected via the dropdown
+    if(selectedApp !== null){
+      const curCat = custOverrides[selectedApp] !== undefined ? custOverrides[selectedApp] : -1;
+      html += '<div class="cust-picker-wrap">'+
+        '<div class="cust-picker-label">Set category for <b>'+esc(selectedApp)+'</b></div>'+
+        '<div class="cust-picker">'+
+          CATS.map(c =>
+            '<button class="cat-btn'+(c.id===curCat?' sel':'')+'" '+
+              'style="background:'+c.bg+';border-color:'+(c.id===curCat?c.color:'rgba(255,255,255,.12)')+'" '+
+              'onclick="custSetCat('+JSON.stringify(esc(selectedApp))+','+c.id+')">'+
+              c.label+
+            '</button>'
+          ).join('')+
+        '</div>'+
+      '</div>';
+    }
+
+    // Chips — only explicitly customized apps
+    const entries = Object.keys(custOverrides);
+    if(entries.length){
+      html += '<div class="cust-chips">'+
+        entries.map(app => {
+          const meta = catOf(custOverrides[app]);
+          return '<div class="cust-chip">'+
+            '<span class="cc-dot" style="background:'+meta.color+'"></span>'+
+            '<span>'+esc(app)+'</span>'+
+            '<span style="font-size:11px;color:'+meta.color+';opacity:.8;margin-left:2px">'+meta.label+'</span>'+
+            '<span class="cc-x" onclick="custRemove('+JSON.stringify(esc(app))+')">×</span>'+
+          '</div>';
+        }).join('')+
+      '</div>';
+    } else {
+      html += '<div class="cust-off-note" style="margin-top:8px">No overrides set yet. Search for an app above to customize it.</div>';
+    }
+
+    body.innerHTML = html;
+
+    // Re-run the dropdown if there was an active query (e.g. after a chip removal)
+    if(lastQuery){ renderDropdown(lastQuery); }
+
+    // After re-render, focus the input if picker is open so UX stays fluid
+    if(selectedApp === null){
+      const inp = document.getElementById('cust-inp');
+      if(inp) inp.focus();
+    }
+  }
+
+  // Close dropdown when clicking elsewhere
+  document.addEventListener('click', e => {
+    if(!e.target.closest('#cust-dd') && !e.target.closest('#cust-inp')) closeDropdown();
+  });
+
+  renderAll();
 })();
 
 $('gen').textContent=new Date().toLocaleString();

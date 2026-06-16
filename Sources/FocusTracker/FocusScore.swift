@@ -55,6 +55,25 @@ enum FocusScore {
     static let minActiveSeconds = 180.0
     // -----------------------------------------------------------------------
 
+    /// THE single definition of a "deep-work block": a deep-work-category block
+    /// at least `deepWorkMinMinutes` long. Both the counter and the deep-work
+    /// sub-score derive from this, so they can never disagree.
+    static func deepWorkBlocks(in blocks: [FocusSession]) -> [FocusSession] {
+        blocks.filter { $0.category == .deepWork && $0.duration >= deepWorkMinMinutes * 60 }
+    }
+
+    /// THE single definition of a counted context switch: you landed in a
+    /// non-work context (neutral or distraction). Used everywhere switches are counted.
+    static func isContextSwitch(_ category: AppCategory) -> Bool {
+        category != .deepWork && category != .communication
+    }
+
+    /// Bumped when the formula changes in a way that shifts historical day scores.
+    /// v2: deep-work sub-score now derives from actual deep-work blocks (was
+    /// longest-block-of-any-category). Scores aren't stored, so every view
+    /// recomputes from raw sessions — historical numbers shift accordingly.
+    static let scoringVersion = 2
+
     static func analyze(_ raw: [FocusSession]) -> DayStats {
         // 1. Drop idle + sub-second noise.
         let active = raw.filter { $0.category != .idle && $0.duration >= 1 }
@@ -80,26 +99,26 @@ enum FocusScore {
         }
 
         // 3. Headline metrics.
-        // A context switch only counts when you land in a NON-work context
-        // (neutral or distraction). Hopping between deep-work / communication
-        // tools is normal work — using info across sites — so it's free.
+        // A counted context switch = landing in a NON-work context (see
+        // isContextSwitch). Hopping between deep-work / communication tools is
+        // normal work — using info across sites — so it's free.
         var switches = 0
-        for i in 1..<max(1, blocks.count) {
-            let dest = blocks[i].category
-            if dest != .deepWork && dest != .communication { switches += 1 }
-        }
+        for i in 1..<max(1, blocks.count) where isContextSwitch(blocks[i].category) { switches += 1 }
+
         let activeHours = activeSeconds / 3600
         let switchesPerHour = activeHours > 0 ? Double(switches) / activeHours : 0
         let avgBlockMinutes = (activeSeconds / Double(blocks.count)) / 60
         let longestMinutes = (blocks.map { $0.duration }.max() ?? 0) / 60
-        let deepWorkBlocks = blocks.filter {
-            $0.category == .deepWork && $0.duration >= deepWorkMinMinutes * 60
-        }.count
+
+        // Deep-work blocks come from ONE definition, used for BOTH the counter
+        // and the sub-score — so a high "deep work" score can't coexist with 0 blocks.
+        let dw = deepWorkBlocks(in: blocks)
+        let longestDeepWorkMinutes = (dw.map { $0.duration }.max() ?? 0) / 60
 
         // 4. Sub-scores (each clamped to 0–100).
         let sustain = min(100, avgBlockMinutes / sustainTargetMinutes * 100)
         let switchScore = 100 * exp(-switchesPerHour / switchDecay)   // 0/hr→100, 15/hr→37, 30/hr→14
-        let deepWork = min(100, longestMinutes / deepWorkTargetMinutes * 100)
+        let deepWork = min(100, longestDeepWorkMinutes / deepWorkTargetMinutes * 100)
         let score = Int((0.40 * sustain + 0.35 * switchScore + 0.25 * deepWork).rounded())
 
         // 5. Distraction leaderboard: rank only true distractions (Twitter, YouTube,
@@ -123,7 +142,7 @@ enum FocusScore {
             switches: switches,
             avgFocusMinutes: avgBlockMinutes,
             longestFocusMinutes: longestMinutes,
-            deepWorkBlocks: deepWorkBlocks,
+            deepWorkBlocks: dw.count,
             activeMinutes: activeSeconds / 60,
             topDistractions: Array(top),
             hasEnoughData: true,

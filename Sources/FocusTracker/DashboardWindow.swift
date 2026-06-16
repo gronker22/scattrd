@@ -4,14 +4,25 @@ import WebKit
 /// Hosts the dashboard in a native WKWebView window, so the Focus Replay opens
 /// as part of the app itself rather than in an external browser. One reusable
 /// window; each open reloads fresh HTML (so the data is always current).
+///
+/// The "customize" script-message handler lets the Customize bar JS post override
+/// changes back to Swift, which persists them and immediately syncs the new state
+/// back to the page via evaluateJavaScript — no full reload needed.
 final class DashboardWindow: NSObject, NSWindowDelegate {
     static let shared = DashboardWindow()
 
     private var window: NSWindow?
     private var webView: WKWebView?
+    private var store: Database?
 
     // Matches the dashboard's --bg (#0e1014), so there's no white flash on open.
     private let bg = NSColor(red: 0.055, green: 0.063, blue: 0.078, alpha: 1)
+
+    /// Must be called once (from AppDelegate) before the first show(), so the
+    /// script-message handler can access the database for override operations.
+    func configure(store: Database) {
+        self.store = store
+    }
 
     func show(html: String) {
         if window == nil { build() }
@@ -49,7 +60,12 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
     private func build() {
         let frame = NSRect(x: 0, y: 0, width: 1320, height: 900)
 
-        let wv = WKWebView(frame: frame)
+        let ucc = WKUserContentController()
+        ucc.add(self, name: "customize")
+        let cfg = WKWebViewConfiguration()
+        cfg.userContentController = ucc
+
+        let wv = WKWebView(frame: frame, configuration: cfg)
         if #available(macOS 12.0, *) { wv.underPageBackgroundColor = bg }
 
         let win = NSWindow(contentRect: frame,
@@ -65,5 +81,51 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
 
         window = win
         webView = wv
+    }
+
+    // MARK: - JS → Swift customize bridge
+
+    /// Sends the current override state back to the page without a full reload,
+    /// so the search input and picker stay visible.
+    private func syncToJS() {
+        let state: [String: Any] = [
+            "enabled": CategoryOverrides.shared.enabled,
+            "overrides": CategoryOverrides.shared.map
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: state),
+              let json = String(data: data, encoding: .utf8) else { return }
+        webView?.evaluateJavaScript("window._syncCustomize(\(json))", completionHandler: nil)
+    }
+}
+
+// MARK: - WKScriptMessageHandler
+
+extension DashboardWindow: WKScriptMessageHandler {
+    func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? String,
+              let data = body.data(using: .utf8),
+              let obj  = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let action = obj["action"] as? String else { return }
+
+        let ov = CategoryOverrides.shared
+        switch action {
+        case "customize:toggle":
+            ov.enabled.toggle()
+
+        case "customize:set":
+            guard let app = obj["app"] as? String,
+                  let catRaw = obj["cat"] as? Int,
+                  let cat = AppCategory(rawValue: catRaw) else { return }
+            ov.apply(app: app, category: cat)
+
+        case "customize:remove":
+            guard let app = obj["app"] as? String else { return }
+            ov.remove(app: app)
+
+        default:
+            break
+        }
+
+        syncToJS()
     }
 }

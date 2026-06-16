@@ -2,6 +2,12 @@ import Foundation
 
 // Codable DTOs serialized to JSON and embedded in the dashboard HTML.
 
+/// One entry in the "Customize bar" search dropdown.
+struct KnownAppDTO: Codable {
+    let n: String   // display name / host
+    let c: Int      // current effective category rawValue (after any override)
+}
+
 struct DashboardPayload: Codable {
     let date: String
     let today: TodayPayload
@@ -9,6 +15,10 @@ struct DashboardPayload: Codable {
     let meetings: [MeetingDTO]
     let meetingWorst: [MeetingRankDTO]
     let calendarOn: Bool
+    // Customize bar
+    let customizeEnabled: Bool
+    let overrides: [String: Int]     // name → AppCategory.rawValue
+    let knownApps: [KnownAppDTO]     // for search dropdown (capped at 200)
 }
 
 struct TodayPayload: Codable {
@@ -170,11 +180,23 @@ enum DashboardData {
 
         let df = DateFormatter(); df.dateFormat = "EEEE, MMM d"
         let calOn = Settings.calendarEnabled && CalendarService.shared.isAuthorized
+
+        // Customize bar — resolve effective category (with any override) for each known app.
+        let overrides = CategoryOverrides.shared
+        let knownApps = store.recentApps(limit: 200).map { a -> KnownAppDTO in
+            let def = AppCategory(rawValue: a.category) ?? .neutral
+            let eff = overrides.effectiveCategory(for: a.name, default: def)
+            return KnownAppDTO(n: a.name, c: eff.rawValue)
+        }
+
         return DashboardPayload(date: df.string(from: now), today: today,
                                 week: buildWeek(store: store, now: now),
                                 meetings: calOn ? MeetingAnalysis.today(store: store, now: now) : [],
                                 meetingWorst: calOn ? MeetingAnalysis.weeklyWorst(store: store, now: now) : [],
-                                calendarOn: calOn)
+                                calendarOn: calOn,
+                                customizeEnabled: overrides.enabled,
+                                overrides: overrides.map,
+                                knownApps: knownApps)
     }
 
     // --- Last 7 days, plus the morning/afternoon "focus fingerprint".

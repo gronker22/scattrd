@@ -50,7 +50,6 @@ enum FocusWrapped {
         var bestScore = -1, bestDay = today
         var worstDistSec = 0.0, worstDay = today, worstApp = ""
         var longestBlock = 0.0, longestDay = today
-        var totalSwitches = 0
         var totalActiveSec = 0.0, totalDeepSec = 0.0
         var hourActive = [Double](repeating: 0, count: 24)
         var hourDeep = [Double](repeating: 0, count: 24)
@@ -68,13 +67,16 @@ enum FocusWrapped {
                     worstApp = st.topDistractions.first?.app ?? ""
                 }
 
-                totalSwitches += st.switches
                 totalActiveSec += st.activeMinutes * 60
 
                 for b in st.blocks {
-                    if b.duration > longestBlock { longestBlock = b.duration; longestDay = day }
                     if b.category == .deepWork { totalDeepSec += b.duration }
                     distributeHours(b, active: &hourActive, deep: &hourDeep)
+                }
+                // "Longest deep-work streak" uses the shared deep-work-block definition,
+                // so it can't credit a long neutral block as deep work.
+                for b in FocusScore.deepWorkBlocks(in: st.blocks) where b.duration > longestBlock {
+                    longestBlock = b.duration; longestDay = day
                 }
             }
             guard let next = cal.date(byAdding: .day, value: 1, to: day) else { break }
@@ -84,6 +86,9 @@ enum FocusWrapped {
         let hours = hourDeep.reduce(0, +) > 0 ? hourDeep : hourActive
         let peakIdx = hours.indices.max(by: { hours[$0] < hours[$1] }) ?? 9
         let peak = (anyData && hours[peakIdx] > 0) ? hourRange(peakIdx) : "—"
+
+        // Shared aggregation — the exact number the Villain tab shows too.
+        let totalSwitches = ContextSwitches.forRange(store: store, from: start, to: now).total
 
         return WrappedData(
             periodLabel: label,
