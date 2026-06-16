@@ -478,95 +478,85 @@ function closeDay(){ $('dayModal').classList.remove('open'); }
 
 // ---- Customize bar ----
 (function(){
-  // Category metadata: rawValue, label, hex color, background for chips/buttons.
   const CATS = [
     { id:0, label:'Deep work',     color:'#34d399', bg:'rgba(52,211,153,.22)'  },
     { id:1, label:'Communication', color:'#fbbf24', bg:'rgba(251,191,36,.22)'  },
     { id:2, label:'Distraction',   color:'#fb7185', bg:'rgba(251,113,133,.22)' },
     { id:3, label:'Neutral',       color:'#8b93a8', bg:'rgba(91,99,120,.22)'   },
   ];
-  // catMeta by rawValue
   const catOf = id => CATS.find(c=>c.id===id) || CATS[3];
+  const esc   = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-  let custEnabled = DATA.customizeEnabled;
-  let custOverrides = DATA.overrides || {};           // {name: rawInt}
-  const knownApps = DATA.knownApps || [];            // [{n,c}]
-  let selectedApp = null;                             // currently active picker target
+  let custEnabled  = DATA.customizeEnabled;
+  let custOverrides = DATA.overrides || {};
+  const knownApps  = DATA.knownApps || [];
+  let selectedApp  = null;
+  let lastQuery    = '';
 
-  const tog    = $('cust-tog');
-  const body   = $('cust-body');
+  // Index arrays so onclick attrs only pass safe integers — no string quoting bugs.
+  window._custDD    = [];   // dropdown app names by index
+  window._custChips = [];   // chip app names by index
 
-  // ---- Swift sync callback (no full reload) ----
+  // Global handlers called from onclick="..." with integer args only.
+  window.custToggle       = custToggle;
+  window.custSearch       = q => { lastQuery=q; renderDropdown(q); };
+  window.custCloseDD      = () => { lastQuery=''; const dd=$('cust-dd'); if(dd){dd.classList.remove('open');dd.innerHTML='';} };
+  window.custSelectDD     = i => custSelect(window._custDD[i]);
+  window.custSetCatPicker = id => { if(selectedApp!==null) custSetCat(selectedApp, id); };
+  window.custRemoveChip   = i => custRemove(window._custChips[i]);
+
   window._syncCustomize = function(state){
-    custEnabled  = state.enabled;
+    custEnabled   = state.enabled;
     custOverrides = state.overrides || {};
     renderAll();
   };
 
-  function send(obj){ window.webkit.messageHandlers.customize.postMessage(JSON.stringify(obj)); }
+  function send(obj){
+    try { window.webkit.messageHandlers.customize.postMessage(JSON.stringify(obj)); }
+    catch(e) { /* not inside WKWebView */ }
+  }
 
   function custToggle(){
-    send({action:'customize:toggle'});
-    // Optimistic local update while Swift round-trips
     custEnabled = !custEnabled;
+    send({action:'customize:toggle'});
     renderAll();
   }
-  window.custToggle = custToggle;
 
   function custSetCat(app, catId){
     custOverrides[app] = catId;
-    send({action:'customize:set', app, cat:catId});
+    send({action:'customize:set', app:app, cat:catId});
     selectedApp = null;
     renderAll();
   }
-  window.custSetCat = custSetCat;
 
   function custRemove(app){
     delete custOverrides[app];
-    send({action:'customize:remove', app});
+    send({action:'customize:remove', app:app});
     if(selectedApp===app) selectedApp=null;
     renderAll();
   }
-  window.custRemove = custRemove;
-
-  // ---- Search / dropdown ----
-  let lastQuery = '';
-  function custSearch(q){
-    lastQuery = q;
-    renderDropdown(q);
-  }
-  window.custSearch = custSearch;
 
   function custSelect(name){
     selectedApp = name;
-    // Clear search box + close dropdown
     const inp = document.getElementById('cust-inp');
-    if(inp){ inp.value = ''; }
-    lastQuery = '';
+    if(inp) inp.value='';
+    lastQuery='';
     renderAll();
   }
-  window.custSelect = custSelect;
-
-  function closeDropdown(){ lastQuery=''; renderDropdown(''); }
-  window.custCloseDD = closeDropdown;
 
   function renderDropdown(q){
     const dd = document.getElementById('cust-dd');
     if(!dd) return;
     const trimmed = q.trim().toLowerCase();
-    if(!trimmed){ dd.classList.remove('open'); dd.innerHTML=''; return; }
-
-    const matches = knownApps
-      .filter(a => a.n.toLowerCase().includes(trimmed))
-      .slice(0, 6);
-
+    if(!trimmed){ dd.classList.remove('open'); dd.innerHTML=''; window._custDD=[]; return; }
+    const matches = knownApps.filter(a=>a.n.toLowerCase().includes(trimmed)).slice(0,6);
+    window._custDD = matches.map(a=>a.n);
     if(!matches.length){ dd.classList.remove('open'); dd.innerHTML=''; return; }
-
-    const esc = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    dd.innerHTML = matches.map(a => {
-      const effCat = custOverrides[a.n] !== undefined ? custOverrides[a.n] : a.c;
+    dd.innerHTML = matches.map((a,i)=>{
+      const effCat = custOverrides[a.n]!==undefined ? custOverrides[a.n] : a.c;
       const meta   = catOf(effCat);
-      return '<div class="cust-ddi" onclick="custSelect('+JSON.stringify(esc(a.n))+')">'+
+      // onclick passes only an integer index — no string quoting needed.
+      return '<div class="cust-ddi" onclick="custSelectDD('+i+')">'+
         '<span class="ddi-name">'+esc(a.n)+'</span>'+
         '<span class="ddi-cat" style="background:'+meta.bg+';color:'+meta.color+'">'+meta.label+'</span>'+
       '</div>';
@@ -574,77 +564,58 @@ function closeDay(){ $('dayModal').classList.remove('open'); }
     dd.classList.add('open');
   }
 
-  // ---- Render ----
   function renderAll(){
-    // Toggle pill
+    const tog = $('cust-tog'), body = $('cust-body');
     tog.textContent = custEnabled ? 'ON' : 'OFF';
-    tog.className   = 'ctog ' + (custEnabled ? 'on' : 'off');
+    tog.className   = 'ctog '+(custEnabled?'on':'off');
 
     if(!custEnabled){
-      body.innerHTML = '<div class="cust-off-note">Category overrides are off — everything uses default classification.</div>';
+      body.innerHTML='<div class="cust-off-note">Category overrides are off — everything uses default classification.</div>';
       return;
     }
 
-    const esc = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-    // Search input (preserved value)
     let html = '<div class="cust-search">'+
       '<input id="cust-inp" type="text" placeholder="Search apps &amp; sites you\'ve visited…" '+
         'oninput="custSearch(this.value)" onkeydown="if(event.key===\'Escape\')custCloseDD()" '+
         'autocomplete="off" value="'+esc(lastQuery)+'">'+
-      '<div class="cust-dd" id="cust-dd"></div>'+
-    '</div>';
+      '<div class="cust-dd" id="cust-dd"></div></div>';
 
-    // Picker — shown when an app is selected via the dropdown
     if(selectedApp !== null){
-      const curCat = custOverrides[selectedApp] !== undefined ? custOverrides[selectedApp] : -1;
+      const curCat = custOverrides[selectedApp]!==undefined ? custOverrides[selectedApp] : -1;
       html += '<div class="cust-picker-wrap">'+
         '<div class="cust-picker-label">Set category for <b>'+esc(selectedApp)+'</b></div>'+
         '<div class="cust-picker">'+
-          CATS.map(c =>
-            '<button class="cat-btn'+(c.id===curCat?' sel':'')+'" '+
-              'style="background:'+c.bg+';border-color:'+(c.id===curCat?c.color:'rgba(255,255,255,.12)')+'" '+
-              'onclick="custSetCat('+JSON.stringify(esc(selectedApp))+','+c.id+')">'+
-              c.label+
-            '</button>'
-          ).join('')+
-        '</div>'+
-      '</div>';
+          // onclick passes only the integer cat id — safe in an HTML attribute.
+          CATS.map(c=>'<button class="cat-btn'+(c.id===curCat?' sel':'')+'" '+
+            'style="background:'+c.bg+';border-color:'+(c.id===curCat?c.color:'rgba(255,255,255,.12)')+'" '+
+            'onclick="custSetCatPicker('+c.id+')">'+c.label+'</button>').join('')+
+        '</div></div>';
     }
 
-    // Chips — only explicitly customized apps
-    const entries = Object.keys(custOverrides);
+    const entries = Object.entries(custOverrides);
+    window._custChips = entries.map(e=>e[0]);
     if(entries.length){
-      html += '<div class="cust-chips">'+
-        entries.map(app => {
-          const meta = catOf(custOverrides[app]);
-          return '<div class="cust-chip">'+
-            '<span class="cc-dot" style="background:'+meta.color+'"></span>'+
-            '<span>'+esc(app)+'</span>'+
-            '<span style="font-size:11px;color:'+meta.color+';opacity:.8;margin-left:2px">'+meta.label+'</span>'+
-            '<span class="cc-x" onclick="custRemove('+JSON.stringify(esc(app))+')">×</span>'+
-          '</div>';
-        }).join('')+
-      '</div>';
+      html += '<div class="cust-chips">'+entries.map(([app,catId],i)=>{
+        const meta=catOf(catId);
+        // onclick passes only the integer index — no app-name quoting.
+        return '<div class="cust-chip">'+
+          '<span class="cc-dot" style="background:'+meta.color+'"></span>'+
+          '<span>'+esc(app)+'</span>'+
+          '<span style="font-size:11px;color:'+meta.color+';opacity:.8;margin-left:2px">'+meta.label+'</span>'+
+          '<span class="cc-x" onclick="custRemoveChip('+i+')">×</span>'+
+        '</div>';
+      }).join('')+'</div>';
     } else {
-      html += '<div class="cust-off-note" style="margin-top:8px">No overrides set yet. Search for an app above to customize it.</div>';
+      html+='<div class="cust-off-note" style="margin-top:8px">No overrides yet — search for an app above to customize it.</div>';
     }
 
     body.innerHTML = html;
-
-    // Re-run the dropdown if there was an active query (e.g. after a chip removal)
-    if(lastQuery){ renderDropdown(lastQuery); }
-
-    // After re-render, focus the input if picker is open so UX stays fluid
-    if(selectedApp === null){
-      const inp = document.getElementById('cust-inp');
-      if(inp) inp.focus();
-    }
+    if(lastQuery) renderDropdown(lastQuery);
+    if(selectedApp===null){ const inp=document.getElementById('cust-inp'); if(inp) inp.focus(); }
   }
 
-  // Close dropdown when clicking elsewhere
-  document.addEventListener('click', e => {
-    if(!e.target.closest('#cust-dd') && !e.target.closest('#cust-inp')) closeDropdown();
+  document.addEventListener('click', e=>{
+    if(!e.target.closest('#cust-dd') && !e.target.closest('#cust-inp')) window.custCloseDD();
   });
 
   renderAll();
