@@ -237,6 +237,10 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         }
         let threshold = Settings.streakThreshold
         let fc = FocusForecast.compute(store: store)
+        // Show the "blocked" state if we just blocked it OR a scattrd Deep Work
+        // event already exists for tomorrow's window (survives reopen / relaunch).
+        let alreadyBlocked = justBlocked
+            || CalendarService.shared.hasDeepWorkBlock(start: fc.blockStart, end: fc.blockEnd)
         let obj: [String: Any] = [
             "hasData": s.hasEnoughData, "score": s.score, "verdict": scoreVerdict(s.score),
             "switches": s.switches, "avg": s.avgFocusMinutes, "longest": s.longestFocusMinutes,
@@ -246,7 +250,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "nudgeOn": Settings.nudgeEnabled,
             "debug": Self.isDebugBuild,
             "calOn": Settings.calendarEnabled,
-            "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel, "justBlocked": justBlocked,
+            "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel, "justBlocked": alreadyBlocked,
             "streak": FocusStreak.current(store: store, threshold: threshold),
             "streakBest": FocusStreak.best(store: store, threshold: threshold),
             "streakGoal": threshold,

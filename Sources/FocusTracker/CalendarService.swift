@@ -35,17 +35,33 @@ final class CalendarService {
             .sorted { $0.startDate < $1.startDate }
     }
 
+    /// Notes stamped on every scattrd-created Deep Work event, so we can later
+    /// recognize one we made (and not confuse it with a user's own event).
+    private static let deepWorkNote = "Blocked by scattrd — your peak focus window."
+
     /// Creates a "Deep Work" event in the default calendar. Needs write (full) access.
     @discardableResult
     func createDeepWorkBlock(start: Date, end: Date) -> Bool {
         guard isAuthorized, let calendar = store.defaultCalendarForNewEvents else { return false }
         let ev = EKEvent(eventStore: store)
         ev.title = "Deep Work"
-        ev.notes = "Blocked by scattrd — your peak focus window."
+        ev.notes = Self.deepWorkNote
         ev.startDate = start
         ev.endDate = end
         ev.calendar = calendar
         do { try store.save(ev, span: .thisEvent); return true } catch { return false }
+    }
+
+    /// True if a scattrd-created Deep Work block already overlaps [start, end).
+    /// Lets the UI remember it was blocked across popover reopens / relaunches,
+    /// rather than relying on an in-memory flag.
+    func hasDeepWorkBlock(start: Date, end: Date) -> Bool {
+        guard isAuthorized, end > start else { return false }
+        let pred = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: pred).contains {
+            $0.title == "Deep Work" && ($0.notes ?? "").contains("scattrd")
+            && $0.startDate < end && $0.endDate > start
+        }
     }
 
     private func declined(_ ev: EKEvent) -> Bool {
