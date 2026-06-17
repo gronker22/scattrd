@@ -54,6 +54,28 @@ enum SelfTest {
         check("invariant: never (deep-work score > 0 while blocks == 0)",
               !(neutralDay.deepWorkScore > 0 && neutralDay.deepWorkBlocks == 0))
 
+        // Formula v3 — a long block can no longer mask a fragmented day.
+        // One 120-min deep-work block, then ten 1-min work-app blocks (alternating
+        // apps so they don't merge; all deep-work, so 0 distraction switches).
+        // Old formula: mean block 11.8 min → Sustain capped at 100, longest 120 →
+        // Deep work 100, 0 distraction switches → Switching 100 ⇒ score 100 (wrong).
+        var frag: [FocusSession] = [sess("Xcode", .deepWork, 120)]
+        for i in 0..<10 { frag.append(sess(i % 2 == 0 ? "Terminal" : "iTerm", .deepWork, 1)) }
+        let fragDay = FocusScore.analyze(frag)
+        check("fragmented day: Sustain uses median (1 min → ~10, not capped at 100)",
+              fragDay.sustainScore <= 12)
+        check("fragmented day: long morning still scores Deep work highly (>90)",
+              fragDay.deepWorkScore > 90)
+        check("fragmented day: overall score reflects fragmentation (55–70, not 100) [\(fragDay.score)]",
+              fragDay.score >= 55 && fragDay.score <= 70)
+
+        // Switching now sees work-to-work fragmentation: a heavily-fragmented
+        // all-work day must score lower than one long unbroken work block.
+        let oneLong = FocusScore.analyze([sess("Xcode", .deepWork, 60)])
+        let manyShort = FocusScore.analyze((0..<30).map { sess($0 % 2 == 0 ? "Xcode" : "Terminal", .deepWork, 2) })
+        check("all-transition fragmentation lowers Switching (\(Int(manyShort.switchScore)) < \(Int(oneLong.switchScore)))",
+              manyShort.switchScore < oneLong.switchScore)
+
         // Bug 2 — every view reports the same total context switches.
         let shared = ContextSwitches.forMonth(store: store).total
         let wrapped = FocusWrapped.compute(store: store, period: .month).totalSwitches
