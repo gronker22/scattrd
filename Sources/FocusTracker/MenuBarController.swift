@@ -157,6 +157,16 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let action = message.body as? String else { return }
+
+        // Custom-scheduled Deep Work block: "blockAt:<startUnix>:<endUnix>".
+        if action.hasPrefix("blockAt:") {
+            let comps = action.dropFirst("blockAt:".count).split(separator: ":")
+            if comps.count == 2, let s = Double(comps[0]), let e = Double(comps[1]), e > s {
+                scheduleDeepWork(start: Date(timeIntervalSince1970: s), end: Date(timeIntervalSince1970: e))
+            }
+            return
+        }
+
         switch action {
         case "dashboard": closePopover(); onOpenDashboard?()
         case "wrapped":   closePopover(); onOpenWrapped?()
@@ -173,20 +183,10 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             if Settings.calendarEnabled { CalendarService.shared.requestAccess { [weak self] _ in self?.reloadPanel() } }
             reloadPanel()
         case "blockIt":
+            // Fallback: block the suggested forecast window (used if the picker
+            // ever can't supply times). Custom times come via "blockAt:".
             let f = FocusForecast.compute(store: store)
-            if CalendarService.shared.isAuthorized {
-                justBlocked = CalendarService.shared.createDeepWorkBlock(start: f.blockStart, end: f.blockEnd)
-                reloadPanel()
-            } else {
-                CalendarService.shared.requestAccess { [weak self] granted in
-                    guard let self else { return }
-                    if granted {
-                        Settings.calendarEnabled = true
-                        self.justBlocked = CalendarService.shared.createDeepWorkBlock(start: f.blockStart, end: f.blockEnd)
-                    }
-                    self.reloadPanel()
-                }
-            }
+            scheduleDeepWork(start: f.blockStart, end: f.blockEnd)
         case "goalUp":    Settings.streakThreshold += 5; reloadPanel()
         case "goalDown":  Settings.streakThreshold -= 5; reloadPanel()
         case "streakSeen": Settings.streakJustBroke = false   // clear after the break animation plays
@@ -194,6 +194,25 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         default: break
         }
         refreshTitle()
+    }
+
+    /// Creates a Deep Work calendar block for an explicit window, requesting
+    /// Calendar access first if needed, then refreshes the panel so the new
+    /// block shows up in the "already scheduled" list.
+    private func scheduleDeepWork(start: Date, end: Date) {
+        let create = { [weak self] in
+            guard let self else { return }
+            self.justBlocked = CalendarService.shared.createDeepWorkBlock(start: start, end: end)
+            self.reloadPanel()
+        }
+        if CalendarService.shared.isAuthorized {
+            create()
+        } else {
+            CalendarService.shared.requestAccess { granted in
+                if granted { Settings.calendarEnabled = true; create() }
+                else { self.reloadPanel() }
+            }
+        }
     }
 
     // MARK: - Summary (opened from a notification tap)
@@ -237,10 +256,20 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
         }
         let threshold = Settings.streakThreshold
         let fc = FocusForecast.compute(store: store)
-        // Show the "blocked" state if we just blocked it OR a scattrd Deep Work
-        // event already exists for tomorrow's window (survives reopen / relaunch).
-        let alreadyBlocked = justBlocked
-            || CalendarService.shared.hasDeepWorkBlock(start: fc.blockStart, end: fc.blockEnd)
+
+        // Picker defaults come from the suggested forecast window; the user can
+        // edit day/start/end before scheduling. Formats are local-time and match
+        // the <input type="date"|"time"> value formats.
+        let dFmt = DateFormatter(); dFmt.dateFormat = "yyyy-MM-dd"
+        let tFmt = DateFormatter(); tFmt.dateFormat = "HH:mm"
+        let lFmt = DateFormatter(); lFmt.dateFormat = "EEE MMM d · h:mm"
+        let l2Fmt = DateFormatter(); l2Fmt.dateFormat = "h:mma"
+
+        // Already-scheduled scattrd blocks (persist across reopen/relaunch).
+        let blocks = CalendarService.shared.upcomingDeepWorkBlocks().map { b -> String in
+            "\(lFmt.string(from: b.start))–\(l2Fmt.string(from: b.end).lowercased())"
+        }
+
         let obj: [String: Any] = [
             "hasData": s.hasEnoughData, "score": s.score, "verdict": scoreVerdict(s.score),
             "switches": s.switches, "avg": s.avgFocusMinutes, "longest": s.longestFocusMinutes,
@@ -250,7 +279,12 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "nudgeOn": Settings.nudgeEnabled,
             "debug": Self.isDebugBuild,
             "calOn": Settings.calendarEnabled,
-            "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel, "justBlocked": alreadyBlocked,
+            "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel,
+            "fcDefDate": dFmt.string(from: fc.blockStart),
+            "fcDefStart": tFmt.string(from: fc.blockStart),
+            "fcDefEnd": tFmt.string(from: fc.blockEnd),
+            "fcMinDate": dFmt.string(from: Date()),
+            "fcBlocks": blocks,
             "streak": FocusStreak.current(store: store, threshold: threshold),
             "streakBest": FocusStreak.best(store: store, threshold: threshold),
             "streakGoal": threshold,
@@ -320,7 +354,16 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
   .fc-body{font-size:12px;margin:4px 0 9px;line-height:1.4}
   .fc-btn{width:100%;padding:8px;border-radius:9px;background:rgba(91,140,255,.92);border:0;color:#fff;font:inherit;font-weight:600;cursor:pointer;font-size:12px}
   .fc-btn:hover{filter:brightness(1.1)}
-  .fc-ok{font-size:12px;color:#34d399;font-weight:600;text-align:center;padding:6px}
+  .fc-ok{font-size:12px;color:#34d399;font-weight:600;text-align:center;padding:5px 6px}
+  .fc-blocks{margin:2px 0 10px;display:flex;flex-direction:column;gap:3px}
+  .fc-sched{display:flex;flex-direction:column;gap:7px}
+  .fc-fl{font-size:10px;color:var(--muted);font-weight:600;display:block;margin-bottom:3px}
+  .fc-in{width:100%;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.06);
+    border:1px solid var(--brd);color:var(--text);font:inherit;font-size:12px;color-scheme:dark}
+  .fc-in:focus{outline:none;border-color:rgba(255,255,255,.28)}
+  .fc-times{display:flex;gap:8px}
+  .fc-times>div{flex:1}
+  .fc-err{font-size:11px;color:#fb7185;min-height:13px;line-height:1.1}
 </style></head>
 <body>
 <div id="root"></div>
@@ -355,11 +398,36 @@ function streakBanner(){
     '<div class="ssub">'+(P.streak>0?'focus streak · best '+P.streakBest:'no streak yet · best '+P.streakBest)+'</div></div>'+goal+'</div>';
 }
 function forecastCard(){
-  if(!P.fcValid) return '';
-  const action = P.justBlocked
-    ? '<div class="fc-ok">✓ Deep Work added to tomorrow\'s calendar</div>'
-    : '<button class="fc-btn" onclick="send(\'blockIt\')">🔒 Block Deep Work · '+P.fcBlock+'</button>';
-  return '<div class="fcast"><div class="fc-hd">🔮 Tomorrow</div><div class="fc-body">'+P.fcText+'</div>'+action+'</div>';
+  // Already-scheduled scattrd Deep Work blocks (persist across reopen/relaunch).
+  let blocked='';
+  if(P.fcBlocks && P.fcBlocks.length){
+    blocked='<div class="fc-blocks">'+P.fcBlocks.map(b=>'<div class="fc-ok">✓ '+b+'</div>').join('')+'</div>';
+  }
+  // Editable day / start / end picker, pre-filled with the suggested window.
+  const picker=
+    '<div class="fc-sched">'+
+      '<div><label class="fc-fl">Day</label>'+
+        '<input class="fc-in" type="date" id="fcDate" value="'+P.fcDefDate+'" min="'+P.fcMinDate+'"></div>'+
+      '<div class="fc-times">'+
+        '<div><label class="fc-fl">Start</label><input class="fc-in" type="time" id="fcStart" value="'+P.fcDefStart+'"></div>'+
+        '<div><label class="fc-fl">End</label><input class="fc-in" type="time" id="fcEnd" value="'+P.fcDefEnd+'"></div>'+
+      '</div>'+
+      '<div class="fc-err" id="fcErr"></div>'+
+      '<button class="fc-btn" onclick="scheduleBlock()">🔒 Add to calendar</button>'+
+    '</div>';
+  return '<div class="fcast"><div class="fc-hd">🔮 Schedule focus</div>'+
+    (P.fcText?'<div class="fc-body">'+P.fcText+'</div>':'')+blocked+picker+'</div>';
+}
+function scheduleBlock(){
+  const d=document.getElementById('fcDate').value;
+  const s=document.getElementById('fcStart').value;
+  const e=document.getElementById('fcEnd').value;
+  const err=document.getElementById('fcErr');
+  if(!d||!s||!e){ if(err)err.textContent='Pick a day, start and end time.'; return; }
+  const start=new Date(d+'T'+s).getTime()/1000;
+  const end=new Date(d+'T'+e).getTime()/1000;
+  if(!(end>start)){ if(err)err.textContent='End must be after start.'; return; }
+  send('blockAt:'+start+':'+end);
 }
 document.getElementById('root').innerHTML =
   '<div class="hd">'+ring()+'<div><div class="vd">'+(P.hasData?P.verdict:'Warming up…')+'</div><div class="tdy">Today\'s focus</div></div></div>'+

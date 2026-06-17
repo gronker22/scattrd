@@ -64,6 +64,18 @@ final class CalendarService {
         }
     }
 
+    /// All scattrd-created Deep Work blocks from `now` through the next `days`,
+    /// chronological. Powers the "already scheduled" confirmations in the panel.
+    func upcomingDeepWorkBlocks(now: Date = Date(), days: Int = 14) -> [(start: Date, end: Date)] {
+        guard isAuthorized,
+              let end = Calendar.current.date(byAdding: .day, value: days, to: now) else { return [] }
+        let pred = store.predicateForEvents(withStart: now, end: end, calendars: nil)
+        return store.events(matching: pred)
+            .filter { $0.title == "Deep Work" && ($0.notes ?? "").contains("scattrd") && $0.endDate > now }
+            .sorted { $0.startDate < $1.startDate }
+            .map { (start: $0.startDate, end: $0.endDate) }
+    }
+
     private func declined(_ ev: EKEvent) -> Bool {
         guard let me = ev.attendees?.first(where: { $0.isCurrentUser }) else { return false }
         return me.participantStatus == .declined
