@@ -76,6 +76,33 @@ enum SelfTest {
         check("all-transition fragmentation lowers Switching (\(Int(manyShort.switchScore)) < \(Int(oneLong.switchScore)))",
               manyShort.switchScore < oneLong.switchScore)
 
+        // Sleep — a long gap between ticks must NOT bridge the open block into one
+        // giant session (which would count sleep as focus and draw a huge replay
+        // segment). Uses an in-memory DB so it can't pollute real data.
+        let mem = Database(path: ":memory:")
+        let am = ActivityMonitor(store: mem)
+        let base = 1_700_000_000.0
+        am.record(app: "Xcode", bundle: nil, category: .deepWork, now: base)
+        am.record(app: "Xcode", bundle: nil, category: .deepWork, now: base + 5)
+        am.record(app: "Xcode", bundle: nil, category: .deepWork, now: base + 8 * 3600)   // 8h "sleep"
+        let recs = mem.sessions(from: base - 10, to: base + 9 * 3600)
+        check("sleep gap does not bridge the open block (no >1h session)",
+              !recs.contains { $0.duration > 3600 })
+        check("sleep gap starts a fresh block instead (2 sessions, not 1)",
+              recs.count == 2)
+        check("a normal 5s gap still extends the same block",
+              recs.first.map { abs($0.duration - 5) < 0.001 } ?? false)
+
+        // Score ↔ Focus Replay correlation: the replay segments ARE the scored
+        // blocks, so their total time must equal the scored active minutes and
+        // their count must match the scored block count.
+        let payload = DashboardData.build(store: store)
+        let segMinutes = payload.today.segments.reduce(0.0) { $0 + ($1.end - $1.start) } / 60
+        check("replay segments total == scored active minutes",
+              abs(segMinutes - payload.today.activeMinutes) < 0.5)
+        check("replay segment count == scored block count",
+              payload.today.segments.count == FocusScore.today(store).blocks.count)
+
         // Bug 2 — every view reports the same total context switches.
         let shared = ContextSwitches.forMonth(store: store).total
         let wrapped = FocusWrapped.compute(store: store, period: .month).totalSwitches
