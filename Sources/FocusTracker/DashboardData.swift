@@ -98,17 +98,22 @@ enum DashboardData {
         let stats = FocusScore.today(store, now: now)
         let blocks = stats.blocks
 
-        // --- Timeline window: trim to activity (±30 min), else default 8:00–20:00.
+        // --- Timeline window: start at the first activity (small lead for
+        // readability), end at the last activity (small trail) — but never run
+        // past "now", so the replay can't show future time or a long sleep-only
+        // tail. Falls back to a default daytime band only when there's no
+        // activity at all.
         let (dayStartTs, dayEndTs) = dayBounds(for: now)
+        let nowTs = now.timeIntervalSince1970
         let windowStart: Double
         let windowEnd: Double
         if let first = blocks.map({ $0.start }).min(),
            let last = blocks.map({ $0.end }).max() {
-            windowStart = max(dayStartTs, first - 1800)
-            windowEnd = min(dayEndTs, max(last + 1800, first + 3600))
+            windowStart = max(dayStartTs, first - 300)              // 5-min lead in
+            windowEnd = min(dayEndTs, nowTs, last + 300)           // 5-min trail, never future
         } else {
             windowStart = dayStartTs + 8 * 3600
-            windowEnd = dayStartTs + 20 * 3600
+            windowEnd = min(dayStartTs + 20 * 3600, nowTs)
         }
 
         let segments = blocks.map {

@@ -102,6 +102,8 @@ enum SelfTest {
               abs(segMinutes - payload.today.activeMinutes) < 0.5)
         check("replay segment count == scored block count",
               payload.today.segments.count == FocusScore.today(store).blocks.count)
+        check("replay window never extends into the future",
+              payload.today.dayEnd <= Date().timeIntervalSince1970 + 1)
 
         // Bug 2 — every view reports the same total context switches.
         let shared = ContextSwitches.forMonth(store: store).total
