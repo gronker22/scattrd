@@ -99,11 +99,12 @@ enum FocusScore {
     /// v2: deep-work sub-score derives from actual deep-work blocks (was
     /// longest-block-of-any-category).
     /// v3: Sustain uses median block length (was mean); Switching blends
-    /// distraction-only with all-transition fragmentation; Deep work blends the
-    /// longest qualifying block with total qualifying minutes. Scores aren't
-    /// stored, so every view recomputes from raw sessions — see the historical-data
-    /// note below before deciding whether to surface this as a "corrected" change.
-    static let scoringVersion = 3
+    /// distraction-only with fragmentation; Deep work blends the longest
+    /// qualifying block with total qualifying minutes.
+    /// v4: the fragmentation term only counts transitions that touch a non-work
+    /// (neutral/distraction) context — switching between two work tools is free.
+    /// Scores aren't stored, so every view recomputes from raw sessions.
+    static let scoringVersion = 4
 
     static func analyze(_ raw: [FocusSession]) -> DayStats {
         // 1. Drop idle + sub-second noise.
@@ -138,9 +139,16 @@ enum FocusScore {
 
         let activeHours = activeSeconds / 3600
         let distractionSwitchesPerHour = activeHours > 0 ? Double(switches) / activeHours : 0
-        // Every block-to-block transition, work-to-work included — fragmentation.
-        let allTransitions = max(0, blocks.count - 1)
-        let allSwitchesPerHour = activeHours > 0 ? Double(allTransitions) / activeHours : 0
+        // Fragmentation transitions: a block-to-block change only counts if it
+        // TOUCHES a non-work (neutral/distraction) context on either side.
+        // Switching between two work tools (deep-work or communication) — e.g.
+        // Xcode → Terminal → Figma — is normal work and is completely free.
+        var fragTransitions = 0
+        for i in 1..<max(1, blocks.count)
+        where isContextSwitch(blocks[i].category) || isContextSwitch(blocks[i - 1].category) {
+            fragTransitions += 1
+        }
+        let fragSwitchesPerHour = activeHours > 0 ? Double(fragTransitions) / activeHours : 0
 
         let avgBlockMinutes = (activeSeconds / Double(blocks.count)) / 60   // displayed "avg block"
         let medianBlockMinutes = medianMinutes(blocks)                      // drives Sustain
@@ -156,9 +164,11 @@ enum FocusScore {
         // Sustain: median block length, so one long block can't mask fragmentation.
         let sustain = min(100, medianBlockMinutes / sustainTargetMinutes * 100)
 
-        // Switching: blend distraction-only switching with overall fragmentation.
+        // Switching: blend distraction-only switching (landing in a non-work app)
+        // with distraction-involved fragmentation (any transition touching a
+        // non-work context). Pure work↔work switching never lowers the score.
         let distractionSwitching = 100 * exp(-distractionSwitchesPerHour / switchDecay)
-        let totalSwitching = 100 * exp(-allSwitchesPerHour / totalSwitchDecay)
+        let totalSwitching = 100 * exp(-fragSwitchesPerHour / totalSwitchDecay)
         let switchScore = distractionSwitchWeight * distractionSwitching
                         + totalSwitchWeight * totalSwitching
 

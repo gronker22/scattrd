@@ -69,12 +69,18 @@ enum SelfTest {
         check("fragmented day: overall score reflects fragmentation (55–70, not 100) [\(fragDay.score)]",
               fragDay.score >= 55 && fragDay.score <= 70)
 
-        // Switching now sees work-to-work fragmentation: a heavily-fragmented
-        // all-work day must score lower than one long unbroken work block.
+        // Switching: deep-work↔deep-work switching is FREE — fragmenting work
+        // across tools must NOT lower Switching (only Sustain reflects it).
         let oneLong = FocusScore.analyze([sess("Xcode", .deepWork, 60)])
-        let manyShort = FocusScore.analyze((0..<30).map { sess($0 % 2 == 0 ? "Xcode" : "Terminal", .deepWork, 2) })
-        check("all-transition fragmentation lowers Switching (\(Int(manyShort.switchScore)) < \(Int(oneLong.switchScore)))",
-              manyShort.switchScore < oneLong.switchScore)
+        let manyWork = FocusScore.analyze((0..<30).map { sess($0 % 2 == 0 ? "Xcode" : "Terminal", .deepWork, 2) })
+        check("deep-work↔deep-work switches don't lower Switching (\(Int(manyWork.switchScore)) == \(Int(oneLong.switchScore)))",
+              abs(manyWork.switchScore - oneLong.switchScore) < 0.001)
+        // …but switching that TOUCHES a distraction still lowers Switching.
+        let withDist = FocusScore.analyze((0..<20).flatMap { _ in
+            [sess("Xcode", .deepWork, 2), sess("reddit.com", .distraction, 1)]
+        })
+        check("distraction-involved switching still lowers Switching (\(Int(withDist.switchScore)) < \(Int(oneLong.switchScore)))",
+              withDist.switchScore < oneLong.switchScore)
 
         // Sleep — a long gap between ticks must NOT bridge the open block into one
         // giant session (which would count sleep as focus and draw a huge replay
