@@ -44,7 +44,7 @@ echo "▶ Compiling (release)…"
 swiftc -O \
     -target arm64-apple-macosx13.0 \
     -sdk "$SDK" \
-    "${OVERLAY_ARGS[@]}" \
+    ${OVERLAY_ARGS[@]+"${OVERLAY_ARGS[@]}"} \
     -framework AppKit -framework IOKit -framework UserNotifications -framework ServiceManagement -framework WebKit -framework EventKit -lsqlite3 \
     -o "$BIN" \
     Sources/FocusTracker/*.swift
