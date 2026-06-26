@@ -81,6 +81,13 @@ enum SelfTest {
         })
         check("distraction-involved switching still lowers Switching (\(Int(withDist.switchScore)) < \(Int(oneLong.switchScore)))",
               withDist.switchScore < oneLong.switchScore)
+        // deep-work ↔ communication is also fully free (both are "work"): a day
+        // bouncing Xcode ↔ Slack costs nothing in switches OR the Switching score.
+        let workMix = FocusScore.analyze((0..<30).map { sess($0 % 2 == 0 ? "Xcode" : "Slack", $0 % 2 == 0 ? .deepWork : .communication, 2) })
+        check("deep-work ↔ communication switches are free (0 switches)",
+              workMix.switches == 0)
+        check("deep-work ↔ communication doesn't lower Switching (\(Int(workMix.switchScore)) == \(Int(oneLong.switchScore)))",
+              abs(workMix.switchScore - oneLong.switchScore) < 0.001)
 
         // Sleep — a long gap between ticks must NOT bridge the open block into one
         // giant session (which would count sleep as focus and draw a huge replay

@@ -611,7 +611,8 @@ function closeDay(){ $('dayModal').classList.remove('open'); }
 
     body.innerHTML = html;
     if(lastQuery) renderDropdown(lastQuery);
-    if(selectedApp===null){ const inp=document.getElementById('cust-inp'); if(inp) inp.focus(); }
+    // NOTE: deliberately do NOT auto-focus the search input here — focusing an
+    // element near the bottom of the page scrolls the dashboard down on open.
   }
 
   document.addEventListener('click', e=>{

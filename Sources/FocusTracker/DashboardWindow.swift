@@ -6,14 +6,18 @@ import WebKit
 /// window; each open reloads fresh HTML (so the data is always current).
 ///
 /// The "customize" script-message handler lets the Customize bar JS post override
-/// changes back to Swift, which persists them and immediately syncs the new state
-/// back to the page via evaluateJavaScript — no full reload needed.
+/// changes back to Swift, which persists them and then reloads the WHOLE dashboard
+/// so the score, Focus Replay, and stat cards all reflect the new categorization —
+/// then scrolls back to the Customize section so the user keeps their place.
 final class DashboardWindow: NSObject, NSWindowDelegate {
     static let shared = DashboardWindow()
 
     private var window: NSWindow?
     private var webView: WKWebView?
     private var store: Database?
+    /// When true, the next finished load scrolls to the Customize section
+    /// (used after an override change); a fresh open stays at the top.
+    private var scrollToCustomizeOnLoad = false
 
     // Matches the dashboard's --bg (#0e1014), so there's no white flash on open.
     private let bg = NSColor(red: 0.055, green: 0.063, blue: 0.078, alpha: 1)
@@ -26,9 +30,19 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
 
     func show(html: String) {
         if window == nil { build() }
+        scrollToCustomizeOnLoad = false   // a fresh open always starts at the top
         webView?.loadHTMLString(html, baseURL: nil)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Rebuilds the whole dashboard from current data (so an override change is
+    /// reflected in the score / replay / cards) and scrolls to the Customize
+    /// section afterward so the user keeps their place.
+    private func reloadReflectingOverrides() {
+        guard let store, let wv = webView else { return }
+        scrollToCustomizeOnLoad = true
+        wv.loadHTMLString(Dashboard.htmlString(store: store), baseURL: nil)
     }
 
     /// Test helper: render the dashboard (optionally running JS first) to a PNG.
@@ -66,6 +80,7 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
         cfg.userContentController = ucc
 
         let wv = WKWebView(frame: frame, configuration: cfg)
+        wv.navigationDelegate = self
         if #available(macOS 12.0, *) { wv.underPageBackgroundColor = bg }
 
         let win = NSWindow(contentRect: frame,
@@ -83,18 +98,17 @@ final class DashboardWindow: NSObject, NSWindowDelegate {
         webView = wv
     }
 
-    // MARK: - JS → Swift customize bridge
+}
 
-    /// Sends the current override state back to the page without a full reload,
-    /// so the search input and picker stay visible.
-    private func syncToJS() {
-        let state: [String: Any] = [
-            "enabled": CategoryOverrides.shared.enabled,
-            "overrides": CategoryOverrides.shared.map
-        ]
-        guard let data = try? JSONSerialization.data(withJSONObject: state),
-              let json = String(data: data, encoding: .utf8) else { return }
-        webView?.evaluateJavaScript("window._syncCustomize(\(json))", completionHandler: nil)
+// MARK: - WKNavigationDelegate
+
+extension DashboardWindow: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard scrollToCustomizeOnLoad else { return }
+        scrollToCustomizeOnLoad = false
+        webView.evaluateJavaScript(
+            "document.getElementById('cust-section')?.scrollIntoView({block:'start'});",
+            completionHandler: nil)
     }
 }
 
@@ -126,6 +140,8 @@ extension DashboardWindow: WKScriptMessageHandler {
             break
         }
 
-        syncToJS()
+        // Reload the whole dashboard so the score / replay / cards reflect the
+        // new categorization — not just the Customize chips.
+        reloadReflectingOverrides()
     }
 }
