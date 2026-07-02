@@ -44,25 +44,34 @@ enum SelfTest {
             FocusSession(app: app, bundleId: nil, category: cat, start: t0, end: t0 + minutes * 60)
         }
 
-        // Bug 1 — the "focus blocks" counter and work sub-score derive from one definition.
-        let neutralDay = FocusScore.analyze([sess("randomsite.com", .neutral, 30)])
-        check("long neutral block → 0 focus blocks AND 0 work score",
-              neutralDay.deepWorkBlocks == 0 && neutralDay.deepWorkScore == 0)
+        // Bug 1 — the "focus blocks" counter and work sub-score derive from one
+        // definition. A distraction is the only non-work category now.
+        let distDay = FocusScore.analyze([sess("reddit.com", .distraction, 30)])
+        check("long distraction block → 0 focus blocks AND 0 work score",
+              distDay.deepWorkBlocks == 0 && distDay.deepWorkScore == 0)
         let deepDay = FocusScore.analyze([sess("Xcode", .deepWork, 30)])
         check("30-min deep-work block → ≥1 focus block AND >0 work score",
               deepDay.deepWorkBlocks >= 1 && deepDay.deepWorkScore > 0)
         check("invariant: never (work score > 0 while focus blocks == 0)",
-              !(neutralDay.deepWorkScore > 0 && neutralDay.deepWorkBlocks == 0))
+              !(distDay.deepWorkScore > 0 && distDay.deepWorkBlocks == 0))
 
-        // Communication counts fully as work: a comms block earns a focus block +
-        // work score, and a comms-only day scores the same as an equal deep-work day.
-        let commsDay = FocusScore.analyze([sess("Slack", .communication, 30)])
-        check("30-min communication block → ≥1 focus block AND >0 work score",
-              commsDay.deepWorkBlocks >= 1 && commsDay.deepWorkScore > 0)
+        // v5/v6 — communication AND neutral/web count fully as work: each earns a
+        // focus block + work score, and a day of either scores the same as an
+        // equal deep-work day.
         let solidCode = FocusScore.analyze([sess("Xcode", .deepWork, 60)])
         let solidComms = FocusScore.analyze([sess("Slack", .communication, 60)])
+        let solidNeutral = FocusScore.analyze([sess("randomsite.com", .neutral, 60)])
         check("comms-only day scores the same as an equal deep-work day (\(solidComms.score) == \(solidCode.score))",
               solidComms.score == solidCode.score)
+        check("neutral-only day scores the same as an equal deep-work day (\(solidNeutral.score) == \(solidCode.score))",
+              solidNeutral.score == solidCode.score)
+        check("30-min neutral block → ≥1 focus block AND >0 work score",
+              solidNeutral.deepWorkBlocks >= 1 && solidNeutral.deepWorkScore > 0)
+
+        // v6 — only distractions count as context switches; neutral is now free.
+        let neutralHops = FocusScore.analyze((0..<20).map { sess($0 % 2 == 0 ? "Xcode" : "randomsite.com", $0 % 2 == 0 ? .deepWork : .neutral, 2) })
+        check("deep-work ↔ neutral switching is free (0 switches)",
+              neutralHops.switches == 0)
 
         // Formula v3 — a long block can no longer mask a fragmented day.
         // One 120-min deep-work block, then ten 1-min work-app blocks (alternating

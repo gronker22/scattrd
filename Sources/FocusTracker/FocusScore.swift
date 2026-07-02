@@ -14,7 +14,7 @@ struct DayStats {
     var switches: Int
     var avgFocusMinutes: Double
     var longestFocusMinutes: Double
-    var deepWorkBlocks: Int         // "focus blocks": deep-work OR communication, ≥12 min
+    var deepWorkBlocks: Int         // "focus blocks": any non-distraction block, ≥12 min
     var activeMinutes: Double
     var topDistractions: [AppUsage]
     var hasEnoughData: Bool
@@ -79,22 +79,23 @@ enum FocusScore {
         blocks.filter { $0.category == .deepWork && $0.duration >= deepWorkMinMinutes * 60 }
     }
 
-    /// THE definition of a "focus-work block": a deep-work OR communication block
-    /// at least `deepWorkMinMinutes` long. Communication (Slack, Mail, Zoom) counts
-    /// fully as work here, so a comms-heavy day can score as high as a coding day.
+    /// THE definition of a "focus-work block": any non-distraction block at least
+    /// `deepWorkMinMinutes` long. Deep-work, communication AND neutral/web all count
+    /// fully as work — only distractions (which the user labels themselves) don't.
     /// Both the "focus blocks" counter and the work sub-score derive from this one
     /// definition, so they can never disagree.
     static func workBlocks(in blocks: [FocusSession]) -> [FocusSession] {
         blocks.filter {
-            ($0.category == .deepWork || $0.category == .communication)
+            $0.category != .distraction && $0.category != .idle
             && $0.duration >= deepWorkMinMinutes * 60
         }
     }
 
     /// THE single definition of a counted context switch: you landed in a
-    /// non-work context (neutral or distraction). Used everywhere switches are counted.
+    /// distraction. Everything else (deep work, communication, neutral/web) is
+    /// treated as productive, so only user-labeled distractions count as switches.
     static func isContextSwitch(_ category: AppCategory) -> Bool {
-        category != .deepWork && category != .communication
+        category == .distraction
     }
 
     /// Median of the given blocks' lengths, in minutes (average of the two middle
@@ -116,10 +117,12 @@ enum FocusScore {
     /// v4: the fragmentation term only counts transitions that touch a non-work
     /// (neutral/distraction) context — switching between two work tools is free.
     /// v5: communication counts fully as work — the "focus blocks" counter and
-    /// the work sub-score include deep-work AND communication blocks, so a
-    /// comms-heavy day can score as high as a coding day.
+    /// the work sub-score include deep-work AND communication blocks.
+    /// v6: neutral/web also counts as work, and ONLY distractions count as
+    /// context switches. Everything the user hasn't labeled a distraction is
+    /// treated as productive.
     /// Scores aren't stored, so every view recomputes from raw sessions.
-    static let scoringVersion = 5
+    static let scoringVersion = 6
 
     static func analyze(_ raw: [FocusSession]) -> DayStats {
         // 1. Drop idle + sub-second noise.
@@ -146,18 +149,17 @@ enum FocusScore {
         }
 
         // 3. Headline metrics.
-        // `switches` is the distraction-only count (landing in a NON-work
-        // context — see isContextSwitch). This is the "context switches" figure
-        // every other view reports, so its meaning is deliberately unchanged.
+        // `switches` counts landing in a distraction (see isContextSwitch) — the
+        // only category that counts as a context switch now. This is the "context
+        // switches" figure every other view reports.
         var switches = 0
         for i in 1..<max(1, blocks.count) where isContextSwitch(blocks[i].category) { switches += 1 }
 
         let activeHours = activeSeconds / 3600
         let distractionSwitchesPerHour = activeHours > 0 ? Double(switches) / activeHours : 0
         // Fragmentation transitions: a block-to-block change only counts if it
-        // TOUCHES a non-work (neutral/distraction) context on either side.
-        // Switching between two work tools (deep-work or communication) — e.g.
-        // Xcode → Terminal → Figma — is normal work and is completely free.
+        // TOUCHES a distraction on either side. Switching between any productive
+        // contexts (deep-work / communication / neutral) is completely free.
         var fragTransitions = 0
         for i in 1..<max(1, blocks.count)
         where isContextSwitch(blocks[i].category) || isContextSwitch(blocks[i - 1].category) {
@@ -169,9 +171,9 @@ enum FocusScore {
         let medianBlockMinutes = medianMinutes(blocks)                      // drives Sustain
         let longestMinutes = (blocks.map { $0.duration }.max() ?? 0) / 60
 
-        // Focus-work blocks (deep-work OR communication) come from ONE definition,
+        // Focus-work blocks (any non-distraction block) come from ONE definition,
         // used for the "focus blocks" counter AND both work sub-score components —
-        // so they can't drift apart. Communication counts fully as work here.
+        // so they can't drift apart. Only user-labeled distractions are excluded.
         let dw = workBlocks(in: blocks)
         let longestDeepWorkMinutes = (dw.map { $0.duration }.max() ?? 0) / 60
         let totalDeepWorkMinutes = dw.reduce(0) { $0 + $1.duration } / 60
