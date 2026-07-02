@@ -44,15 +44,25 @@ enum SelfTest {
             FocusSession(app: app, bundleId: nil, category: cat, start: t0, end: t0 + minutes * 60)
         }
 
-        // Bug 1 — deep-work sub-score and deep-work-block count derive from one definition.
+        // Bug 1 — the "focus blocks" counter and work sub-score derive from one definition.
         let neutralDay = FocusScore.analyze([sess("randomsite.com", .neutral, 30)])
-        check("long neutral block → 0 deep-work blocks AND 0 deep-work score",
+        check("long neutral block → 0 focus blocks AND 0 work score",
               neutralDay.deepWorkBlocks == 0 && neutralDay.deepWorkScore == 0)
         let deepDay = FocusScore.analyze([sess("Xcode", .deepWork, 30)])
-        check("30-min deep-work block → ≥1 block AND >0 deep-work score",
+        check("30-min deep-work block → ≥1 focus block AND >0 work score",
               deepDay.deepWorkBlocks >= 1 && deepDay.deepWorkScore > 0)
-        check("invariant: never (deep-work score > 0 while blocks == 0)",
+        check("invariant: never (work score > 0 while focus blocks == 0)",
               !(neutralDay.deepWorkScore > 0 && neutralDay.deepWorkBlocks == 0))
+
+        // Communication counts fully as work: a comms block earns a focus block +
+        // work score, and a comms-only day scores the same as an equal deep-work day.
+        let commsDay = FocusScore.analyze([sess("Slack", .communication, 30)])
+        check("30-min communication block → ≥1 focus block AND >0 work score",
+              commsDay.deepWorkBlocks >= 1 && commsDay.deepWorkScore > 0)
+        let solidCode = FocusScore.analyze([sess("Xcode", .deepWork, 60)])
+        let solidComms = FocusScore.analyze([sess("Slack", .communication, 60)])
+        check("comms-only day scores the same as an equal deep-work day (\(solidComms.score) == \(solidCode.score))",
+              solidComms.score == solidCode.score)
 
         // Formula v3 — a long block can no longer mask a fragmented day.
         // One 120-min deep-work block, then ten 1-min work-app blocks (alternating

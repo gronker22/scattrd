@@ -14,7 +14,7 @@ struct DayStats {
     var switches: Int
     var avgFocusMinutes: Double
     var longestFocusMinutes: Double
-    var deepWorkBlocks: Int
+    var deepWorkBlocks: Int         // "focus blocks": deep-work OR communication, ≥12 min
     var activeMinutes: Double
     var topDistractions: [AppUsage]
     var hasEnoughData: Bool
@@ -73,10 +73,22 @@ enum FocusScore {
     // -----------------------------------------------------------------------
 
     /// THE single definition of a "deep-work block": a deep-work-category block
-    /// at least `deepWorkMinMinutes` long. Both the counter and the deep-work
-    /// sub-score derive from this, so they can never disagree.
+    /// at least `deepWorkMinMinutes` long. Used for genuine-deep-work analytics
+    /// (Focus Wrapped's longest deep-work streak, golden hours).
     static func deepWorkBlocks(in blocks: [FocusSession]) -> [FocusSession] {
         blocks.filter { $0.category == .deepWork && $0.duration >= deepWorkMinMinutes * 60 }
+    }
+
+    /// THE definition of a "focus-work block": a deep-work OR communication block
+    /// at least `deepWorkMinMinutes` long. Communication (Slack, Mail, Zoom) counts
+    /// fully as work here, so a comms-heavy day can score as high as a coding day.
+    /// Both the "focus blocks" counter and the work sub-score derive from this one
+    /// definition, so they can never disagree.
+    static func workBlocks(in blocks: [FocusSession]) -> [FocusSession] {
+        blocks.filter {
+            ($0.category == .deepWork || $0.category == .communication)
+            && $0.duration >= deepWorkMinMinutes * 60
+        }
     }
 
     /// THE single definition of a counted context switch: you landed in a
@@ -103,8 +115,11 @@ enum FocusScore {
     /// qualifying block with total qualifying minutes.
     /// v4: the fragmentation term only counts transitions that touch a non-work
     /// (neutral/distraction) context — switching between two work tools is free.
+    /// v5: communication counts fully as work — the "focus blocks" counter and
+    /// the work sub-score include deep-work AND communication blocks, so a
+    /// comms-heavy day can score as high as a coding day.
     /// Scores aren't stored, so every view recomputes from raw sessions.
-    static let scoringVersion = 4
+    static let scoringVersion = 5
 
     static func analyze(_ raw: [FocusSession]) -> DayStats {
         // 1. Drop idle + sub-second noise.
@@ -154,9 +169,10 @@ enum FocusScore {
         let medianBlockMinutes = medianMinutes(blocks)                      // drives Sustain
         let longestMinutes = (blocks.map { $0.duration }.max() ?? 0) / 60
 
-        // Deep-work blocks come from ONE definition, used for the counter AND
-        // both deep-work sub-score components — so they can't drift apart.
-        let dw = deepWorkBlocks(in: blocks)
+        // Focus-work blocks (deep-work OR communication) come from ONE definition,
+        // used for the "focus blocks" counter AND both work sub-score components —
+        // so they can't drift apart. Communication counts fully as work here.
+        let dw = workBlocks(in: blocks)
         let longestDeepWorkMinutes = (dw.map { $0.duration }.max() ?? 0) / 60
         let totalDeepWorkMinutes = dw.reduce(0) { $0 + $1.duration } / 60
 
@@ -172,7 +188,8 @@ enum FocusScore {
         let switchScore = distractionSwitchWeight * distractionSwitching
                         + totalSwitchWeight * totalSwitching
 
-        // Deep work: blend the longest qualifying block with total qualifying time.
+        // Focus work: blend the longest qualifying block with total qualifying
+        // time (deep-work + communication both count).
         let longestComponent = min(100, longestDeepWorkMinutes / deepWorkTargetMinutes * 100)
         let totalComponent = min(100, totalDeepWorkMinutes / deepWorkTotalTargetMinutes * 100)
         let deepWork = deepWorkLongestWeight * longestComponent

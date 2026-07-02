@@ -37,7 +37,7 @@ func makeDailyInsight(_ s: DayStats) -> DailyInsight {
         subtitle = clip("Avg focus block: \(mins(s.avgFocusMinutes)) min")
     }
 
-    let body = clip("\(s.switches) switches · \(mins(s.avgFocusMinutes))m avg · \(s.deepWorkBlocks) deep")
+    let body = clip("\(s.switches) switches · \(mins(s.avgFocusMinutes))m avg · \(s.deepWorkBlocks) focus")
 
     return DailyInsight(title: title, subtitle: subtitle, body: body)
 }

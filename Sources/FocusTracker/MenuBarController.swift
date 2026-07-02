@@ -433,7 +433,7 @@ document.getElementById('root').innerHTML =
   '<div class="hd">'+ring()+'<div><div class="vd">'+(P.hasData?P.verdict:'Warming up…')+'</div><div class="tdy">Today\'s focus</div></div></div>'+
   streakBanner()+
   forecastCard()+
-  '<div class="grid">'+cell(P.switches,'switches')+cell(fmt(P.avg)+'m','avg block')+cell(fmt(P.longest)+'m','longest')+cell(P.deep,'deep blocks')+'</div>'+
+  '<div class="grid">'+cell(P.switches,'switches')+cell(fmt(P.avg)+'m','avg block')+cell(fmt(P.longest)+'m','longest')+cell(P.deep,'focus blocks')+'</div>'+
   '<div class="sec">Top distractions</div>'+dl+
   '<div style="height:10px"></div>'+
   tog('Track browser tabs',P.tabsOn,'tabs')+

@@ -329,7 +329,7 @@ $('date').textContent = DATA.date;
 $('verdict').textContent = T.verdict;
 const streakChip = T.streak>0 ? '<span class="chip streak-chip">🔥 <b>'+T.streak+'</b> day streak · best '+T.streakBest+'</span>' : '';
 $('chips').innerHTML = streakChip + (T.hasData ?
-  [['Sustain',T.sustain],['Switching',T.switching],['Deep work',T.deepWork]]
+  [['Sustain',T.sustain],['Switching',T.switching],['Focus',T.deepWork]]
     .map(p=>'<span class="chip">'+p[0]+' <b>'+p[1]+'</b></span>').join('') : '');
 
 // ---- Stat cards ----
@@ -337,7 +337,7 @@ const cards=[
   [T.switches,'context switches', Math.min(100,T.switches), 'var(--red)'],
   [fmt(T.avgFocus)+'m','avg focus block', Math.min(100,T.avgFocus/20*100), 'var(--green)'],
   [fmt(T.longestFocus)+'m','longest streak', Math.min(100,T.longestFocus/45*100), 'var(--green)'],
-  [T.deepWorkBlocks,'deep-work blocks', Math.min(100,T.deepWorkBlocks*25), 'var(--green)'],
+  [T.deepWorkBlocks,'focus blocks', Math.min(100,T.deepWorkBlocks*25), 'var(--green)'],
   [fmt(T.activeMinutes)+'m','active time', Math.min(100,T.activeMinutes/240*100), 'var(--amber)'],
 ];
 $('cards').innerHTML = cards.map(c=>
@@ -420,7 +420,7 @@ if(!T.hasData){
 function showDay(i){
   const d=W.days[i]; if(!d||!d.hasData) return;
   const fn=m=>m>=10?Math.round(m):Math.round(m*10)/10;
-  const rows=[['Focus score',d.score+' / 100'],['Context switches',d.switches],['Avg focus block',fn(d.avgFocus)+' min'],['Longest streak',fn(d.longestFocus)+' min'],['Deep-work blocks',d.deepWorkBlocks],['Active time',fn(d.activeMin)+' min'],['Top distraction',d.topApp]];
+  const rows=[['Focus score',d.score+' / 100'],['Context switches',d.switches],['Avg focus block',fn(d.avgFocus)+' min'],['Longest streak',fn(d.longestFocus)+' min'],['Focus blocks',d.deepWorkBlocks],['Active time',fn(d.activeMin)+' min'],['Top distraction',d.topApp]];
   $('dayModal').innerHTML='<div class="dayCard" onclick="event.stopPropagation()">'+
     '<div class="dayHd"><div><div class="dayTitle">'+d.label+' '+d.date+'</div><div class="dayVerd" style="color:'+band(d.score)+'">'+d.verdict+'</div></div>'+
     '<div class="dayScore" style="color:'+band(d.score)+'">'+d.score+'</div></div>'+
