@@ -13,7 +13,6 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
     var onOpenDashboard: (() -> Void)?
     var onOpenWrapped: (() -> Void)?
     private var isPaused = false
-    private var justBlocked = false
 
     private let popover = NSPopover()
     private var webView: WKWebView!
@@ -95,7 +94,6 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
-        justBlocked = false
         webView.loadHTMLString(panelHTML(), baseURL: nil)
         NSApp.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -178,6 +176,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             if Settings.tabTrackingEnabled { BrowserTabReader.resetPermissionCache() }
             reloadPanel()
         case "nudge":     Settings.nudgeEnabled.toggle(); reloadPanel()
+        case "summary":   Settings.summaryEnabled.toggle(); reloadPanel()
         case "calendar":
             Settings.calendarEnabled.toggle()
             if Settings.calendarEnabled { CalendarService.shared.requestAccess { [weak self] _ in self?.reloadPanel() } }
@@ -202,7 +201,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
     private func scheduleDeepWork(start: Date, end: Date) {
         let create = { [weak self] in
             guard let self else { return }
-            self.justBlocked = CalendarService.shared.createDeepWorkBlock(start: start, end: end)
+            CalendarService.shared.createDeepWorkBlock(start: start, end: end)
             self.reloadPanel()
         }
         if CalendarService.shared.isAuthorized {
@@ -277,6 +276,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
             "dists": dists,
             "tabsOn": Settings.tabTrackingEnabled, "loginOn": LoginItem.isEnabled, "paused": isPaused,
             "nudgeOn": Settings.nudgeEnabled,
+            "sumOn": Settings.summaryEnabled, "sumTime": Settings.summaryTimeString,
             "debug": Self.isDebugBuild,
             "calOn": Settings.calendarEnabled,
             "fcValid": fc.valid, "fcText": fc.headline, "fcBlock": fc.blockLabel,
@@ -370,6 +370,7 @@ final class MenuBarController: NSObject, WKScriptMessageHandler {
 <script>
 const P = \#(json);
 const send = a => window.webkit.messageHandlers.act.postMessage(a);
+const esc = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const band = s => s>=70?'#34d399':s>=40?'#fbbf24':'#fb7185';
 const fmt = m => m>=10?Math.round(m):Math.round(m*10)/10;
 function ring(){
@@ -384,7 +385,7 @@ function cell(n,l){return '<div class="glass cell"><div class="n">'+n+'</div><di
 function tog(label,on,act){return '<div class="glass tog" onclick="send(\''+act+'\')"><div class="t">'+label+'</div>'+
   '<div class="pill '+(on?'on':'off')+'">'+(on?'ON':'OFF')+'</div></div>';}
 let dl='';
-if(P.dists.length){ dl=P.dists.map(d=>'<div class="drow"><span>'+d.app+'</span><span class="dm">'+d.ints+'×</span></div>').join(''); }
+if(P.dists.length){ dl=P.dists.map(d=>'<div class="drow"><span>'+esc(d.app)+'</span><span class="dm">'+d.ints+'×</span></div>').join(''); }
 else { dl='<div class="empty">'+(P.hasData?'None — nicely focused 👏':'—')+'</div>'; }
 function streakBanner(){
   const goal='<div class="goal"><span class="gl">goal ≥'+P.streakGoal+'</span>'+
@@ -439,6 +440,7 @@ document.getElementById('root').innerHTML =
   tog('Track browser tabs',P.tabsOn,'tabs')+
   tog('Launch at login',P.loginOn,'login')+
   tog('Nudge me when scattered',P.nudgeOn,'nudge')+
+  tog('Daily summary at '+P.sumTime,P.sumOn,'summary')+
   tog('Show calendar meetings',P.calOn,'calendar')+
   tog(P.paused?'Tracking paused':'Tracking active',!P.paused,'pause')+
   '<div class="btns"><button class="primary" onclick="send(\'dashboard\')">Open Full Dashboard</button>'+

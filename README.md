@@ -14,9 +14,9 @@ your day into a single **Focus Score (0–100)**.
   when enabled.
 - **Dropdown dashboard** — today's switches, average focus length, longest streak,
   deep-work blocks, and a **Distraction Leaderboard** of your top focus killers.
-- **Daily Summary notification** — a Spotify-Wrapped-style nudge at a time you pick
-  (default 5pm), leading with one striking, personalized stat. Plus an on-demand
-  recap and a "Send Test Summary Now" button. Requires running `scattrd.app`.
+- **Daily Summary notification** — a Spotify-Wrapped-style nudge each evening
+  (5pm; toggleable from the menubar panel), leading with one striking,
+  personalized stat. Requires running `scattrd.app`.
 - **Focus Replay dashboard** — opens in its **own native app window** (a built-in
   web view, not your browser) with a scrubbable day timeline, an hourly attention
   curve, the distraction leaderboard, and 7-day weekly patterns + a
@@ -33,15 +33,18 @@ your day into a single **Focus Score (0–100)**.
 
 ## The Focus Score
 
-Weighted blend of three 0–100 sub-scores (see `FocusScore.swift`):
+Weighted blend of three 0–100 sub-scores (see `FocusScore.swift`, scoring v7):
 
-| Sub-score | Rewards | Weight |
-|-----------|---------|--------|
-| Sustain   | Longer average focus blocks (20 min = perfect)        | 40% |
-| Switching | Fewer switches per hour (exponential decay)           | 35% |
-| Deep work | A long unbroken streak (45 min = perfect)             | 25% |
+| Sub-score  | Rewards | Weight |
+|------------|---------|--------|
+| Sustain    | Longer **median** block length (10 min = perfect) — one long block can't mask a fragmented day | 40% |
+| Switching  | Fewer distraction switches per hour (70%) blended with distraction-involved fragmentation (30%); work↔work switching is free | 35% |
+| Focus work | Longest non-distraction block ≥12 min (25 min = perfect, 60%) blended with total qualifying minutes (45 min = perfect, 40%) | 25% |
 
-All constants live at the top of `FocusScore.swift` — easy to tune.
+Only apps/sites labeled as distractions count against you — deep-work,
+communication and neutral contexts all count fully as work (v6), and idle gaps
+between sessions are never counted as focus (v7). All constants live at the top
+of `FocusScore.swift` — easy to tune.
 
 ## Build & run
 

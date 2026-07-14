@@ -17,8 +17,7 @@ enum GoldenHours {
         let today = cal.startOfDay(for: now)
         var day = cal.date(byAdding: .day, value: -(lookbackDays - 1), to: today) ?? today
         while day <= today {
-            let (s, e) = dayBounds(for: day)
-            let st = FocusScore.analyze(store.sessions(from: s, to: e))
+            let st = DayStatsCache.stats(store: store, day: day, now: now)
             for b in st.blocks { distribute(b, active: &active, deep: &deep) }
             guard let next = cal.date(byAdding: .day, value: 1, to: day) else { break }
             day = next

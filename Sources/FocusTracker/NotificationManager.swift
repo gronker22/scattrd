@@ -9,7 +9,6 @@ import UserNotifications
 /// notifications only work when launched from the packaged `scattrd.app`.
 final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
     private var available = false
-    private(set) var authorized = false
 
     /// Called when the user taps a delivered notification.
     var onOpenSummary: (() -> Void)?
@@ -26,9 +25,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         let block = UNNotificationAction(identifier: "BLOCK_IT", title: "Block it 🔒", options: [])
         center.setNotificationCategories([UNNotificationCategory(identifier: "FORECAST", actions: [block],
                                                                  intentIdentifiers: [], options: [])])
-        center.requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
-            DispatchQueue.main.async { self?.authorized = granted }
-        }
+        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     func postDailySummary(_ stats: DayStats) {
@@ -96,7 +93,6 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
                     // Prompt hasn't been answered yet — request now, then deliver.
                     center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
                         DispatchQueue.main.async {
-                            self?.authorized = granted
                             if granted { self?.deliver(insight, id: id, to: center) }
                         }
                     }

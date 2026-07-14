@@ -55,7 +55,7 @@ final class Database {
         var err: UnsafeMutablePointer<Int8>?
         if sqlite3_exec(db, sql, nil, nil, &err) != SQLITE_OK {
             let msg = err.map { String(cString: $0) } ?? "unknown"
-            FileHandle.standardError.write(Data("FocusTracker SQL error: \(msg)\n".utf8))
+            FileHandle.standardError.write(Data("scattrd SQL error: \(msg)\n".utf8))
             sqlite3_free(err)
         }
     }
@@ -91,11 +91,13 @@ final class Database {
         sqlite3_step(stmt)
     }
 
-    /// All sessions that started within [from, to), in chronological order.
+    /// All sessions overlapping [from, to), clamped to the window, in
+    /// chronological order — so midnight-spanning blocks are split correctly
+    /// across the days they touch.
     func sessions(from: Double, to: Double) -> [FocusSession] {
         let sql = """
         SELECT app, bundle_id, category, start_ts, end_ts
-        FROM sessions WHERE start_ts >= ? AND start_ts < ?
+        FROM sessions WHERE end_ts > ? AND start_ts < ?
         ORDER BY start_ts ASC;
         """
         var stmt: OpaquePointer?
@@ -111,8 +113,12 @@ final class Database {
             let rawCat = AppCategory(rawValue: Int(sqlite3_column_int(stmt, 2))) ?? .neutral
             // Apply user overrides at read time — raw DB rows are never mutated.
             let category = CategoryOverrides.shared.effectiveCategory(for: app, default: rawCat)
-            let start = sqlite3_column_double(stmt, 3)
-            let end = sqlite3_column_double(stmt, 4)
+            // Clamp to the window so a block spanning midnight contributes only
+            // its in-window portion to each day (no double- or mis-counting).
+            // The WHERE clause guarantees overlap, so end ≥ start always holds —
+            // including zero-length just-started sessions, which stay included.
+            let start = max(from, sqlite3_column_double(stmt, 3))
+            let end = min(to, sqlite3_column_double(stmt, 4))
             result.append(FocusSession(app: app, bundleId: bundle, category: category, start: start, end: end))
         }
         return result
@@ -121,8 +127,11 @@ final class Database {
     /// Distinct app/host names seen in the last `limit` unique entries (most recent first).
     /// Used to populate the "Customize bar" search dropdown.
     func recentApps(limit: Int = 200) -> [(name: String, category: Int)] {
+        // The bare MAX(start_ts) in the SELECT makes SQLite return the other
+        // bare columns (category) from that same most-recent row — without it,
+        // `category` would come from an arbitrary row in the group.
         let sql = """
-        SELECT app, category FROM sessions
+        SELECT app, category, MAX(start_ts) FROM sessions
         WHERE app NOT IN ('Idle','Unknown')
         GROUP BY app ORDER BY MAX(start_ts) DESC LIMIT ?;
         """

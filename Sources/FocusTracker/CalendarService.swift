@@ -52,18 +52,6 @@ final class CalendarService {
         do { try store.save(ev, span: .thisEvent); return true } catch { return false }
     }
 
-    /// True if a scattrd-created Deep Work block already overlaps [start, end).
-    /// Lets the UI remember it was blocked across popover reopens / relaunches,
-    /// rather than relying on an in-memory flag.
-    func hasDeepWorkBlock(start: Date, end: Date) -> Bool {
-        guard isAuthorized, end > start else { return false }
-        let pred = store.predicateForEvents(withStart: start, end: end, calendars: nil)
-        return store.events(matching: pred).contains {
-            $0.title == "Deep Work" && ($0.notes ?? "").contains("scattrd")
-            && $0.startDate < end && $0.endDate > start
-        }
-    }
-
     /// All scattrd-created Deep Work blocks from `now` through the next `days`,
     /// chronological. Powers the "already scheduled" confirmations in the panel.
     func upcomingDeepWorkBlocks(now: Date = Date(), days: Int = 14) -> [(start: Date, end: Date)] {

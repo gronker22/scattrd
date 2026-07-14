@@ -140,7 +140,9 @@ enum DashboardData {
                 }
                 t = chunkEnd
             }
-            if i > 0 {
+            // Same predicate as the headline `switches` figure (v6: landing in a
+            // distraction), so the hourly curve can never disagree with the score.
+            if i > 0, FocusScore.isContextSwitch(b.category) {
                 let h = cal.component(.hour, from: Date(timeIntervalSince1970: b.start))
                 if (0..<24).contains(h) { switchesByHour[h] += 1 }
             }
@@ -218,8 +220,8 @@ enum DashboardData {
 
         for offset in stride(from: 6, through: 0, by: -1) {
             guard let dayDate = cal.date(byAdding: .day, value: -offset, to: now) else { continue }
-            let (s, e) = dayBounds(for: dayDate)
-            let st = FocusScore.analyze(store.sessions(from: s, to: e))
+            let (s, _) = dayBounds(for: dayDate)
+            let st = DayStatsCache.stats(store: store, day: dayDate, now: now)
 
             days.append(DayDTO(
                 label: dayLabel.string(from: dayDate),
@@ -241,15 +243,17 @@ enum DashboardData {
                 if st.score < worstScore { worstScore = st.score; worstDay = dayLabel.string(from: dayDate) }
             }
 
+            // "Focus" share matches v6 scoring: everything except user-labeled
+            // distractions counts as work (blocks are already idle-free).
             let noon = s + 12 * 3600
             for b in st.blocks {
                 let mid = (b.start + b.end) / 2
                 if mid < noon {
                     morningActive += b.duration
-                    if b.category == .deepWork { morningDeep += b.duration }
+                    if b.category != .distraction { morningDeep += b.duration }
                 } else {
                     afternoonActive += b.duration
-                    if b.category == .deepWork { afternoonDeep += b.duration }
+                    if b.category != .distraction { afternoonDeep += b.duration }
                 }
             }
         }

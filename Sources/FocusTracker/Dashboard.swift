@@ -23,7 +23,7 @@ enum Dashboard {
 
     private static func outputURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = base.appendingPathComponent("FocusTracker", isDirectory: true)
+        let dir = base.appendingPathComponent("scattrd", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("dashboard.html")
     }
@@ -302,6 +302,7 @@ const band = s => s>=70?'#34d399':s>=40?'#fbbf24':'#fb7185';
 const grad = s => s>=70?['#34d399','#22d3ee']:s>=40?['#fbbf24','#fb923c']:['#fb7185','#f43f5e'];
 const hhmm = ts => new Date(ts*1000).toLocaleTimeString([], {hour:'numeric', minute:'2-digit'});
 const ease = p => 1-Math.pow(1-p,3);
+const escHTML = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 // Stagger the reveals
 document.querySelectorAll('.reveal').forEach((el,i)=>el.style.animationDelay=(i*0.09)+'s');
@@ -410,7 +411,7 @@ if(!T.hasData){
   if(!d.length){ $('distractions').innerHTML='<div class="empty">'+(T.hasData?'No distractions logged — nicely focused 👏':'—')+'</div>'; return; }
   const max=Math.max(...d.map(x=>x.switchIns),1);
   $('distractions').innerHTML=d.map(x=>
-    '<div class="drow"><div class="dn">'+x.app+'</div>'+
+    '<div class="drow"><div class="dn">'+escHTML(x.app)+'</div>'+
     '<div class="dbar" data-w="'+(x.switchIns/max*72+5)+'"></div>'+
     '<div class="dm">'+x.switchIns+' interruption'+(x.switchIns===1?'':'s')+' · '+fmt(x.minutes)+' min</div></div>').join('');
   setTimeout(()=>document.querySelectorAll('.dbar').forEach(b=>b.style.width=b.dataset.w+'%'),300);
@@ -420,7 +421,7 @@ if(!T.hasData){
 function showDay(i){
   const d=W.days[i]; if(!d||!d.hasData) return;
   const fn=m=>m>=10?Math.round(m):Math.round(m*10)/10;
-  const rows=[['Focus score',d.score+' / 100'],['Context switches',d.switches],['Avg focus block',fn(d.avgFocus)+' min'],['Longest streak',fn(d.longestFocus)+' min'],['Focus blocks',d.deepWorkBlocks],['Active time',fn(d.activeMin)+' min'],['Top distraction',d.topApp]];
+  const rows=[['Focus score',d.score+' / 100'],['Context switches',d.switches],['Avg focus block',fn(d.avgFocus)+' min'],['Longest streak',fn(d.longestFocus)+' min'],['Focus blocks',d.deepWorkBlocks],['Active time',fn(d.activeMin)+' min'],['Top distraction',escHTML(d.topApp)]];
   $('dayModal').innerHTML='<div class="dayCard" onclick="event.stopPropagation()">'+
     '<div class="dayHd"><div><div class="dayTitle">'+d.label+' '+d.date+'</div><div class="dayVerd" style="color:'+band(d.score)+'">'+d.verdict+'</div></div>'+
     '<div class="dayScore" style="color:'+band(d.score)+'">'+d.score+'</div></div>'+
@@ -445,8 +446,8 @@ function closeDay(){ $('dayModal').classList.remove('open'); }
   const lean=(m===0&&a===0)?'Keep tracking to reveal your focus fingerprint.'
     :(m>a?'You focus deeper in the <b>morning</b>.':a>m?'You focus deeper in the <b>afternoon</b>.':'Your focus is evenly split across the day.');
   $('finger').innerHTML=
-    '<div class="fcard"><div class="ft">Morning deep-work</div><div class="fv" style="color:'+band(m)+'">'+m+'%</div></div>'+
-    '<div class="fcard"><div class="ft">Afternoon deep-work</div><div class="fv" style="color:'+band(a)+'">'+a+'%</div></div>'+
+    '<div class="fcard"><div class="ft">Morning focus</div><div class="fv" style="color:'+band(m)+'">'+m+'%</div></div>'+
+    '<div class="fcard"><div class="ft">Afternoon focus</div><div class="fv" style="color:'+band(a)+'">'+a+'%</div></div>'+
     '<div class="fcard"><div class="ft">Best / toughest day</div><div class="fv">'+W.bestDay+' <span style="color:var(--faint);font-weight:500;font-size:14px">vs</span> '+W.worstDay+'</div></div>'+
     '<div class="fcard" style="flex:2"><div class="ft">Your pattern</div><div class="fv" style="font-size:15px;font-weight:560;line-height:1.45">'+lean+'</div></div>';
 })();

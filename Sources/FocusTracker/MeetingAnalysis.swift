@@ -47,7 +47,7 @@ enum MeetingAnalysis {
         for offset in 0..<7 {
             guard let day = cal.date(byAdding: .day, value: -offset, to: now) else { continue }
             let (s, e) = dayBounds(for: day)
-            let dayScore = FocusScore.analyze(store.sessions(from: s, to: e)).score
+            let dayScore = DayStatsCache.stats(store: store, day: day, now: now).score
             let evs = CalendarService.shared.meetings(from: Date(timeIntervalSince1970: s),
                                                       to: Date(timeIntervalSince1970: e))
             for ev in evs {

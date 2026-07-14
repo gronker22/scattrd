@@ -12,8 +12,7 @@ enum FocusStreak {
         var streak = 0, noDataRun = 0, first = true
         var day = cal.startOfDay(for: now)
         for _ in 0..<400 {
-            let (s, e) = dayBounds(for: day)
-            let st = FocusScore.analyze(store.sessions(from: s, to: e))
+            let st = DayStatsCache.stats(store: store, day: day, now: now)
             if st.hasEnoughData {
                 noDataRun = 0
                 if st.score >= threshold { streak += 1 }
@@ -35,8 +34,7 @@ enum FocusStreak {
         let today = cal.startOfDay(for: now)
         var day = cal.date(byAdding: .day, value: -(lookbackDays - 1), to: today) ?? today
         while day <= today {
-            let (s, e) = dayBounds(for: day)
-            let st = FocusScore.analyze(store.sessions(from: s, to: e))
+            let st = DayStatsCache.stats(store: store, day: day, now: now)
             if st.hasEnoughData {
                 if st.score >= threshold { run += 1; best = max(best, run) }
                 else { run = 0 }

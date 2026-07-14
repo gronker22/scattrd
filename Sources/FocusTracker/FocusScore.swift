@@ -70,6 +70,10 @@ enum FocusScore {
     /// Need at least this much active time before a score is meaningful (~3 min,
     /// so a short focused session still gets scored).
     static let minActiveSeconds = 180.0
+    /// Max gap (seconds) bridged when merging same-app blocks. Matches the idle
+    /// threshold (2 min): a quick pause in the same app stays one block, but a
+    /// real break never counts its idle time as focus.
+    static let mergeMaxGapSeconds = 120.0
     // -----------------------------------------------------------------------
 
     /// THE single definition of a "deep-work block": a deep-work-category block
@@ -121,19 +125,25 @@ enum FocusScore {
     /// v6: neutral/web also counts as work, and ONLY distractions count as
     /// context switches. Everything the user hasn't labeled a distraction is
     /// treated as productive.
+    /// v7: same-app blocks only merge across gaps ≤ mergeMaxGapSeconds, so idle
+    /// wall-clock time between two same-app sessions is never counted as focus.
     /// Scores aren't stored, so every view recomputes from raw sessions.
-    static let scoringVersion = 6
+    static let scoringVersion = 7
 
     static func analyze(_ raw: [FocusSession]) -> DayStats {
         // 1. Drop idle + sub-second noise.
         let active = raw.filter { $0.category != .idle && $0.duration >= 1 }
 
         // 2. Merge consecutive same-app sessions into "focus blocks".
-        //    Going App A → (idle) → App A reads as one continuous block: you
-        //    came back to the same context, so it isn't a real switch.
+        //    Going App A → (brief idle) → App A reads as one continuous block: you
+        //    came back to the same context, so it isn't a real switch. The gap must
+        //    be short, though — merging across a long idle stretch would count the
+        //    idle wall-clock time as focus (block duration = end − start), inflating
+        //    active minutes, Sustain and the longest streak.
         var blocks: [FocusSession] = []
         for s in active {
-            if let last = blocks.last, last.app == s.app {
+            if let last = blocks.last, last.app == s.app,
+               s.start - last.end <= mergeMaxGapSeconds {
                 blocks[blocks.count - 1] = FocusSession(
                     app: last.app, bundleId: last.bundleId, category: last.category,
                     start: last.start, end: s.end

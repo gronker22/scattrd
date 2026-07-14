@@ -18,7 +18,7 @@ final class CategoryOverrides {
     /// always returns the default, so all categorization behaves as if this class didn't exist.
     var enabled: Bool {
         get { d.object(forKey: enabledKey) as? Bool ?? false }
-        set { d.set(newValue, forKey: enabledKey) }
+        set { d.set(newValue, forKey: enabledKey); DayStatsCache.invalidateAll() }
     }
 
     /// Raw override map: app/host name → AppCategory.rawValue.
@@ -31,10 +31,12 @@ final class CategoryOverrides {
 
     func apply(app: String, category: AppCategory) {
         var m = map; m[app] = category.rawValue; map = m
+        DayStatsCache.invalidateAll()
     }
 
     func remove(app: String) {
         var m = map; m.removeValue(forKey: app); map = m
+        DayStatsCache.invalidateAll()
     }
 
     /// Returns the override category if the feature is enabled and an override

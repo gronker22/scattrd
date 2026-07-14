@@ -20,8 +20,7 @@ enum ContextSwitches {
         var day = cal.startOfDay(for: start)
         let last = cal.startOfDay(for: end)
         while day <= last {
-            let (s, e) = dayBounds(for: day)
-            let st = FocusScore.analyze(store.sessions(from: s, to: e))
+            let st = DayStatsCache.stats(store: store, day: day)
             total += st.switches                      // same number the daily score uses
             let blocks = st.blocks
             if blocks.count > 1 {

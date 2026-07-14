@@ -61,9 +61,15 @@ enum Settings {
     }
 
     /// Score a day must reach to extend the focus streak (user-settable).
+    /// Changing it resets the tracked peak — otherwise raising the goal shrinks
+    /// the recomputed streak and fires a spurious "streak broke" notification.
     static var streakThreshold: Int {
         get { (d.object(forKey: Key.streakGoal) as? Int) ?? 60 }
-        set { d.set(min(95, max(30, newValue)), forKey: Key.streakGoal) }
+        set {
+            let clamped = min(95, max(30, newValue))
+            if clamped != streakThreshold { streakPeak = 0 }
+            d.set(clamped, forKey: Key.streakGoal)
+        }
     }
     static var streakPeak: Int {
         get { d.integer(forKey: Key.streakPeak) }

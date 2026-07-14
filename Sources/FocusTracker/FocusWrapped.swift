@@ -55,8 +55,7 @@ enum FocusWrapped {
         var hourDeep = [Double](repeating: 0, count: 24)
 
         while day <= today {
-            let (s, e) = dayBounds(for: day)
-            let st = FocusScore.analyze(store.sessions(from: s, to: e))
+            let st = DayStatsCache.stats(store: store, day: day, now: now)
             if st.hasEnoughData {
                 anyData = true
                 if st.score > bestScore { bestScore = st.score; bestDay = day }
@@ -174,6 +173,7 @@ enum FocusWrapped {
 const D = \#(json);
 const root = document.getElementById('root');
 const comma = n => n.toLocaleString();
+const esc = s => (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const brand = '<div class="brand"><span class="dot"></span>scattrd</div>';
 if(!D.hasData){
   root.innerHTML = brand + '<div class="empty">Not enough focus data for <b>'+D.periodLabel+'</b> yet.<br><br>Keep scattrd running and your Wrapped will fill in.</div>';
@@ -182,7 +182,7 @@ if(!D.hasData){
     ['🏆','Best focus day', D.bestDayLabel+' · '+D.bestDayScore+'/100'],
     ['🔥','Longest deep-work streak', D.longestStreakMin+' min · '+D.longestStreakDay],
     ['⏰','Most productive hour', D.peakHour],
-    ['🌀','Worst distraction day', D.worstDayLabel+(D.worstDayApp!=='—'?' · '+D.worstDayApp:'')],
+    ['🌀','Worst distraction day', D.worstDayLabel+(D.worstDayApp!=='—'?' · '+esc(D.worstDayApp):'')],
     ['↔','Total context switches', comma(D.totalSwitches)],
   ];
   root.innerHTML = brand +

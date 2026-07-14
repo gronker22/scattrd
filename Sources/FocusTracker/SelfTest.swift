@@ -108,6 +108,29 @@ enum SelfTest {
         check("deep-work ↔ communication doesn't lower Switching (\(Int(workMix.switchScore)) == \(Int(oneLong.switchScore)))",
               abs(workMix.switchScore - oneLong.switchScore) < 0.001)
 
+        // v7 — idle time between two same-app sessions must NOT count as focus.
+        // Two 15-min Xcode blocks separated by a 2h idle gap = 30 active minutes,
+        // two blocks, longest 15 min (NOT one 2.5h mega-block).
+        let idleGap: [FocusSession] = [
+            FocusSession(app: "Xcode", bundleId: nil, category: .deepWork, start: t0, end: t0 + 15 * 60),
+            FocusSession(app: "Idle", bundleId: nil, category: .idle, start: t0 + 15 * 60, end: t0 + 135 * 60),
+            FocusSession(app: "Xcode", bundleId: nil, category: .deepWork, start: t0 + 135 * 60, end: t0 + 150 * 60),
+        ]
+        let idleDay = FocusScore.analyze(idleGap)
+        check("idle gap between same-app blocks isn't counted as focus (30m active, got \(Int(idleDay.activeMinutes)))",
+              abs(idleDay.activeMinutes - 30) < 0.1)
+        check("idle gap keeps the blocks separate (2 blocks, got \(idleDay.blocks.count))",
+              idleDay.blocks.count == 2)
+        check("idle gap doesn't inflate the longest streak (15m, got \(Int(idleDay.longestFocusMinutes)))",
+              abs(idleDay.longestFocusMinutes - 15) < 0.1)
+        // …but a brief same-app pause (≤2 min) still merges into one block.
+        let briefGap: [FocusSession] = [
+            FocusSession(app: "Xcode", bundleId: nil, category: .deepWork, start: t0, end: t0 + 600),
+            FocusSession(app: "Xcode", bundleId: nil, category: .deepWork, start: t0 + 660, end: t0 + 1260),
+        ]
+        check("a ≤2-min same-app gap still merges into one block",
+              FocusScore.analyze(briefGap).blocks.count == 1)
+
         // Sleep — a long gap between ticks must NOT bridge the open block into one
         // giant session (which would count sleep as focus and draw a huge replay
         // segment). Uses an in-memory DB so it can't pollute real data.
